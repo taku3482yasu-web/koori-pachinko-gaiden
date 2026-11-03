@@ -248,6 +248,8 @@ const Sound = (() => {
         stIn: () => { tone(60, 0, 1.0, { volume: 0.15, type: 'sawtooth', slideTo: 120 }); [587, 698, 880, 1175].forEach((f, i) => tone(f, 0.3 + i * 0.12, 0.3, { volume: 0.07, type: 'square' })); },
         count: () => tone(1760, 0, 0.04, { volume: 0.03 }),
         // 先バレ (前作の 音を 低く した もの / おにおにの 先咆哮) と 一発告知 (ズキューン)
+        // 上乗せタイムの 違和感: ブツッ と 音が 切れる (そのあと Sound.hush で 少し 無音)
+        iwakan: () => { tone(60, 0, 0.08, { volume: 0.2, type: 'square', slideTo: 30 }); tone(5200, 0, 0.03, { volume: 0.05, type: 'square' }); },
         senbareVoice,
         senbareRoar,
         ippatsu: () => { tone(4000, 0, 0.5, { slideTo: 600, volume: 0.09, type: 'sawtooth' }); tone(80, 0, 0.6, { volume: 0.15, type: 'square', slideTo: 40 }); [1568, 2093, 2637].forEach((f, i) => tone(f, 0.45 + i * 0.08, 0.4, { volume: 0.07 })); },
