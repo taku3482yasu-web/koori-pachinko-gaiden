@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head>
+<body>
+<!-- アイコンの もと (sh tools/shot.sh "tools/icon.html?s=192" icons/icon-192.png 192,192) -->
+<canvas id="c"></canvas>
+<script src="../js/art-legacy.js"></script>
+<script src="../js/art.js"></script>
+<script>
+const s = Number(new URLSearchParams(location.search).get('s') || 192);
+const c = document.getElementById('c'); c.width = s; c.height = s;
+const g = c.getContext('2d');
+const grad = g.createLinearGradient(0, 0, 0, s);
+grad.addColorStop(0, '#3a1a6a'); grad.addColorStop(1, '#0a0e24');
+g.fillStyle = grad; g.fillRect(0, 0, s, s);
+const k = s / 192;
+Art.draw(g, 'kanabo', 150 * k, 170 * k, { height: 120 * k, rot: 0.4 });
+Art.draw(g, 'onioni', 84 * k, 176 * k, { height: 128 * k });
+Art.draw(g, 'kanezu', 160 * k, 70 * k, { height: 56 * k, alpha: 0.9 });
+</script></body></html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#05070d">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Pこおりくんの大冒険外伝 ～おにおにの挑戦 めざめる３人の氷達～</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <main class="machine">
+        <!-- 台の 筐体 (js/cabinet.js)。盤面を はめこみ、右横に 金棒レバー、下に PUSH -->
+        <div class="cabinet" id="cabinet">
+            <canvas id="cabinet-art" class="cabinet-art" aria-hidden="true"></canvas>
+            <canvas id="board" class="board" aria-label="パチンコの盤面"></canvas>
+            <div id="lever" class="lever" role="button" aria-label="金棒レバー (左へ 引く)"><canvas></canvas></div>
+            <button id="push" class="push" aria-label="台の ボタン (PUSH)"><span>PUSH</span></button>
+        </div>
+
+        <section class="controls">
+            <div class="machine-bar">
+                <span id="spec-display" class="spec-display"></span>
+                <span class="bar-buttons">
+                    <button id="sound-button" class="small-button">音: ON</button>
+                    <button id="machine-button" class="small-button">台選び</button>
+                    <button id="taizen-button" class="small-button" type="button" title="ゲーム大全に もどる" onclick="if (confirm('ゲーム大全に もどる？')) location.href = 'https://taku3482yasu-web.github.io/koori-game-taizen/'">🏠 大全</button>
+                </span>
+            </div>
+            <div id="mode-display" class="mode-display">通常時</div>
+            <div id="aim-display" class="aim-display" hidden>右打ち →</div>
+            <!-- RASH えらび: ST へ 行く 大当たりの あいだに (1 / 2 キーでも) -->
+            <div id="rash-choice" class="rash-choice" hidden>
+                <p>どっちの RASH に する？</p>
+                <button data-rash="onioni"><span class="rc-name">おにおにRASH</span><span class="rc-note">転落型。おにおにが たおされるまで 何回でも</span></button>
+                <button data-rash="hashira"><span class="rc-name">柱の氷RASH</span><span class="rc-note">100回の ST。一発告知・先バレ・バトル</span></button>
+            </div>
+            <div class="status">
+                <div class="status-item"><span class="label">持ち玉</span><span id="balls" class="value">0</span></div>
+                <div class="status-item"><span class="label">回転数</span><span id="spins" class="value">0</span></div>
+                <div class="status-item"><span class="label">連チャン</span><span id="chain" class="value">-</span></div>
+                <div class="status-item"><span class="label">回転率 /1k</span><span id="rate" class="value">-</span></div>
+            </div>
+            <div class="strength-row">
+                <span class="strength-label">強さ <b id="strength-value">0</b></span>
+                <input id="strength-slider" class="strength-slider" type="range" min="0" max="100" step="1" aria-label="発射の強さ">
+            </div>
+            <div class="handle-area">
+                <button id="left-button" class="small-button aim-button">← 左打ち</button>
+                <div id="handle" class="handle" role="slider" aria-label="発射の強さ (押している間 発射・横に うごかすと 強さ)" tabindex="0">
+                    <div id="handle-knob" class="handle-knob"><span></span></div>
+                    <div class="handle-center">打</div>
+                </div>
+                <button id="fire-button" class="fire-button"><span class="fire-icon">▶</span><span class="fire-word">発射</span></button>
+                <button id="right-button" class="small-button aim-button">右打ち →</button>
+            </div>
+            <p class="hint">「発射」で 打ちはじめ・もう一度で 止まる (Space)。強さは ゲージ・← →。台の ボタン PUSH は B キー、右横の 金棒レバーは 左へ 引く (L キー)。</p>
+            <div class="menu-row">
+                <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
+                <button id="data-button" class="small-button">データ</button>
+                <a href="howto.html" class="small-button link-button">遊び方</a>
+            </div>
+        </section>
+
+        <section id="debug-panel" class="debug-panel" hidden>
+            <div class="debug-buttons">
+                <button id="debug-hit">次は 大当たり (ST)</button>
+                <button id="debug-hit-jitan">次は 大当たり (時短)</button>
+                <button id="debug-yaku">次は 役物つき 当たり</button>
+                <button id="debug-reach">次は リーチ はずれ</button>
+                <button id="debug-fall">次は 転落</button>
+                <select id="debug-enemy" aria-label="ST の 相手">
+                    <option value="">相手: 抽選</option>
+                    <option value="harigeneral">ハリージェネラル</option>
+                    <option value="hyougaryu">ヒョウガリュウ</option>
+                    <option value="haru">ハルゥ</option>
+                    <option value="okadishi">オカディシ</option>
+                    <option value="kanezu">カネーズ</option>
+                </select>
+                <button id="debug-st">ST に 入る</button>
+                <button id="debug-jitan">時短に 入る</button>
+                <button id="debug-hst">柱の氷RASH に 入る</button>
+                <button id="debug-hbattle">次は 柱の氷 集結バトルで 当たり</button>
+                <button id="debug-gim-pillars">役物: 柱</button>
+                <button id="debug-gim-doors">役物: 扉</button>
+                <button id="debug-gim-kanabo">役物: 金棒</button>
+                <button id="debug-auto">オート発射</button>
+            </div>
+            <div id="debug-stats" class="debug-stats"></div>
+        </section>
+    </main>
+
+    <!-- 台えらび -->
+    <div id="picker" class="picker">
+        <div class="picker-box" role="dialog" aria-labelledby="picker-title">
+            <p class="picker-kicker">こおりくんの大冒険外伝</p>
+            <h2 id="picker-title">おにおにの挑戦<br><small>～めざめる３人の氷達～</small></h2>
+            <p class="picker-story">こおりくんが 行方不明に なった！ さがしに 出た おにおにが 耳にしたのは、こおり一族の 悪の 一派「柱の氷」が こおりくんを さらった という うわさ…。旅先で 出会った ライバル探検隊と ともに、おにおには こおりくんを とりもどせるのか！？</p>
+            <div class="spec-options">
+                <button class="spec-option" data-spec="s319"><span class="spec-label">1/319 ライトスペック</span><span class="spec-note">大当たりは いつも 3R (約450個)。初当たりの 50% が ST、のこりは 時短100回 (あたれば ST)。ST 継続率 約80%</span></button>
+                <button class="spec-option" data-spec="s399"><span class="spec-label">1/399 ミドルスペック</span><span class="spec-note">大当たりは いつも 10R (約1500個)。初当たりの 80% が ST、20% が 時短100回。ST 継続率 約75%・出玉は こっちが 多め</span></button>
+            </div>
+            <p class="picker-note">ST は 2 つから えらべる (継続率は おなじ)。<br>おにおにRASH: 転落型。回数の かぎりは ないが、おにおにが たおされたら 終わり。撃破率は 相手で かわる (ハリージェネラル ＞ ヒョウガリュウ ＞ ハルゥ ＞ オカディシ ＞ カネーズ)<br>柱の氷RASH: 100回の ST。一発告知・先バレが 主役。バトルで おにおに・こおりくんが 出たら チャンス、柱の氷が 集結したら 大チャンス。一撃 (レバー) は 連撃 (ボタン連打) より 期待度が 高い</p>
+        </div>
+    </div>
+
+    <div id="data-panel" class="picker" hidden>
+        <div class="picker-box">
+            <h2>データ</h2>
+            <div id="data-body"></div>
+            <div class="picker-actions"><button data-close>とじる</button></div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/art-legacy.js"></script>
+    <script src="js/art.js"></script>
+    <script src="js/show.js"></script>
+    <script src="js/machine.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/board.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/lcd.js"></script>
+    <script src="js/cabinet.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/bgm.js"></script>
+    <script src="js/main.js"></script>
+    <script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');</script>
+</body>
+</html>

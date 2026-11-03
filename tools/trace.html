@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>玉の 道すじ (確認用)</title>
+<style>body { margin: 0; background: #222; } canvas { width: 760px; display: block; }</style>
+</head>
+<body>
+<!-- ?strength=30&n=40&open=1 : その 強さで 打った 玉の 道すじを 描く (確認用。sh tools/shot.sh tools/trace.html?strength=30 out.png) -->
+<canvas id="board"></canvas>
+<script src="../js/config.js"></script>
+<script src="../js/board.js"></script>
+<script src="../js/physics.js"></script>
+<script src="../js/render.js"></script>
+<script>
+    const q = new URLSearchParams(location.search);
+    const strengths = (q.get('strength') || '30').split(',').map(Number);
+    const n = Number(q.get('n') || 30);
+    const board = Board.build(CONFIG, {});
+    if (q.get('open') === '1') { Board.setOpen(board, 'denchu', true); Board.setOpen(board, 'attacker', true); }
+    const canvas = document.getElementById('board');
+    const view = BoardView.create(canvas, board, CONFIG);
+    view.noGimmick = true;
+    const world = { board, balls: [], rng: Math.random, events: [] };
+    BoardView.draw(view, world, null, null, 0);
+    const ctx = view.ctx;
+    ctx.setTransform(BoardView.SCALE, 0, 0, BoardView.SCALE, 0, 0);
+    const colors = ['#ff0', '#0ff', '#f0f', '#0f0', '#f80'];
+    strengths.forEach((s, si) => {
+        for (let i = 0; i < n; i++) {
+            const w = { board, balls: [], rng: Math.random, events: [] };
+            Physics.launch(w, s, CONFIG);
+            const ball = w.balls[0];
+            ctx.strokeStyle = colors[si % colors.length];
+            ctx.globalAlpha = 0.35;
+            ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(ball.x, ball.y);
+            for (let k = 0; k < 60 * 20 && w.balls.length; k++) {
+                Physics.step(w, 1 / 60, CONFIG);
+                if (w.balls[0]) ctx.lineTo(w.balls[0].x, w.balls[0].y);
+            }
+            ctx.stroke();
+        }
+    });
+    ctx.globalAlpha = 1;
+</script>
+</body>
+</html>

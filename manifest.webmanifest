@@ -1,0 +1,12 @@
+{
+    "name": "Pこおりくんの大冒険外伝 ～おにおにの挑戦 めざめる３人の氷達～",
+    "short_name": "こおり外伝",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#05070d",
+    "theme_color": "#05070d",
+    "icons": [
+        { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    ]
+}
