@@ -83,7 +83,18 @@ body {
 .push.down { transform: translateY(3px); box-shadow: 0 1px 0 #3a0008; }
 .push.glow { animation: push-glow 0.25s infinite alternate; }
 @keyframes push-glow { from { box-shadow: 0 4px 0 #3a0008, 0 0 8px #ff2a3a; } to { box-shadow: 0 4px 0 #3a0008, 0 0 26px #ffd84a, 0 0 40px #ff2a3a; transform: scale(1.06); } }
-@media (prefers-reduced-motion: reduce) { .lever.glow canvas, .push.glow { animation: none; } }
+/* 先バレ: ボタンが 赤く 光る */
+.push.red { animation: push-red 0.16s infinite alternate; }
+@keyframes push-red { from { background: radial-gradient(circle at 40% 35%, #ffb0b8, #ff1030 55%, #8a0010); box-shadow: 0 4px 0 #3a0008, 0 0 14px #ff1030; } to { background: radial-gradient(circle at 40% 35%, #ffffff, #ff2a3a 50%, #a00010); box-shadow: 0 4px 0 #3a0008, 0 0 30px #ff1030, 0 0 56px #ff0020; } }
+/* 震える (動画の レバブル・ボタンブルを 参考に): モーターで 小きざみに ぶるぶる (約 26 回 / 秒)。光る 動きと いっしょに 動く ように translate / rotate を 使う */
+.push.vibrate { animation: vib 0.077s linear infinite; }
+.push.glow.vibrate { animation: push-glow 0.25s infinite alternate, vib 0.077s linear infinite; }
+.push.red.vibrate { animation: push-red 0.16s infinite alternate, vib 0.077s linear infinite; }
+.lever.vibrate canvas { animation: lever-vib 0.077s linear infinite; filter: drop-shadow(0 0 6px #ff2a3a); }
+.lever.glow.vibrate canvas { animation: lever-shake 0.12s infinite, lever-vib 0.077s linear infinite; }
+@keyframes vib { 0% { translate: 0 0; rotate: 0deg; } 25% { translate: -2px 1px; rotate: -2deg; } 50% { translate: 1px -1px; rotate: 1deg; } 75% { translate: 2px 1px; rotate: 2deg; } 100% { translate: 0 0; rotate: 0deg; } }
+@keyframes lever-vib { 0% { rotate: 0deg; } 25% { rotate: -3deg; } 50% { rotate: 1deg; } 75% { rotate: 3deg; } 100% { rotate: 0deg; } }
+@media (prefers-reduced-motion: reduce) { .lever.glow canvas, .push.glow, .push.vibrate, .lever.vibrate canvas { animation: none; } }
 
 .controls { flex: 1 1 280px; min-width: 0; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
 .machine-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -147,6 +158,13 @@ button:hover { border-color: var(--accent); }
 .picker-box h2 small { font-size: 14px; color: #9cf0c8; text-shadow: none; }
 .picker-story { font-size: 13px; line-height: 1.7; margin: 0 0 12px; }
 .picker-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+/* 設定えらび */
+.setting-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.setting-title { flex: none; color: var(--gold); }
+.setting-options { display: flex; flex-wrap: wrap; gap: 4px; }
+.setting-option { padding: 6px 10px; min-width: 36px; }
+.setting-option.selected { border-color: var(--gold); color: var(--gold); background: #2a2450; }
+.setting-note { margin: 0 0 10px; }
 .spec-options { display: grid; gap: 8px; }
 .spec-option { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 12px; }
 .spec-label { font-size: 19px; color: var(--gold); }

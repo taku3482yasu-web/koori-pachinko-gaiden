@@ -113,6 +113,34 @@ const CONFIG = {
     //   1/399: 大当たりは いつも 10R (約 1500個)。初当たりの 80% が ST、20% が 時短 100回。ST の 継続率 約 75% (出玉は 1/399 の ほうが 多め)
     //   ST は 転落型: 1 回転ごとに「大当たり (st.hitRate)」と「転落 (st.fallRate)」を 抽選。継続率 = hit / (hit + fall)。
     //     どちらかが 出た 回転は おにおにの バトル (相手で 撃破率が かわる。show.battle)。大当たりなら 撃破、転落なら おにおにが たおされて 通常時へ
+    // ----- 設定 1〜6 (2026-11-04 ユーザー指定: 前作と おなじく 設定を つける) -----
+    // 前作と おなじく 釘で つける (釘調整)。設定が 高いほど ヘソの 命釘が ひらいて よく 回り、出玉率が 上がる。
+    // 出玉率の 目標 (settingRtp) は 両スペック 共通 (Claude が きめた。設定1 は 負けやすく、設定6 は 大きく 勝てる)。
+    // spec.settings[]: hesoWidth = ヘソの 命釘の すき間 (玉の 直径は 6) / heso = 左打ちの 玉が ヘソに 入る 割合 (tools/flow.js で 測った 数。tools/test.js が 使う)
+    //   たしかめ: node tools/test.js --settings
+    settingRtp: [0.8, 0.88, 0.96, 1.04, 1.12, 1.2],
+    // 設定示唆 (前作と おなじ 考え方。数値は 前作の まま): RASH・時短が 終わった とき rate の 確率で、液晶の 左下に トロフィーが 出る (show 秒)。
+    //   色は「設定○以上」 (白は どの 設定でも 出る、虹は 設定6 確定)。weights は 台の 設定ごとの、出た ときの 色の 重み
+    settingHint: {
+        rate: 0.5, show: 8,
+        weights: {
+            1: { 1: 100 },
+            2: { 1: 55, 2: 45 },
+            3: { 1: 40, 2: 20, 3: 40 },
+            4: { 1: 30, 2: 15, 3: 15, 4: 40 },
+            5: { 1: 25, 2: 10, 3: 10, 4: 15, 5: 40 },
+            6: { 1: 20, 2: 10, 3: 10, 4: 10, 5: 15, 6: 35 }
+        },
+        colors: {
+            1: { name: '白', main: '#f2f2f2', light: '#ffffff', dark: '#a8a8b8' },
+            2: { name: '青', main: '#3f8cff', light: '#a8ccff', dark: '#1d4ea8' },
+            3: { name: '緑', main: '#3fcf5f', light: '#a8f0b8', dark: '#1d7a33' },
+            4: { name: '紫', main: '#a860ff', light: '#d8b8ff', dark: '#5a2a9a' },
+            5: { name: '赤', main: '#ff3a3a', light: '#ffb0b0', dark: '#9a1a1a' },
+            6: { name: '虹', rainbow: true }
+        }
+    },
+
     specs: {
         s319: {
             label: '1/319', name: 'ライトスペック',
@@ -125,7 +153,9 @@ const CONFIG = {
             // 柱の氷RASH: 100 回で 当たりを ねらう (1 − (1 − 1/62.6)^100 ≒ 80%)
             hashira: { hitRate: 1 / 62.6, spins: 100 },
             target: { st: 0.5, continuation: 0.8 },
-            board: { hesoWidth: 10.5 }   // 釘: ヘソを 少し あける (1000円で 約20回転)
+            // 設定 1〜6 の 釘 (1000円で 約 25 〜 39 回転。3R なので よく 回らないと 勝てない)
+            settings: [{ hesoWidth: 12.2, heso: 0.113 }, { hesoWidth: 13.5, heso: 0.133 }, { hesoWidth: 14.2, heso: 0.148 },
+                { hesoWidth: 15.4, heso: 0.17 }, { hesoWidth: 16.2, heso: 0.194 }, { hesoWidth: 16.9, heso: 0.22 }]
         },
         s399: {
             label: '1/399', name: 'ミドルスペック',
@@ -137,7 +167,9 @@ const CONFIG = {
             st: { hitRate: 1 / 70, fallRate: 1 / 210 },
             hashira: { hitRate: 1 / 72.6, spins: 100 },   // 1 − (1 − 1/72.6)^100 ≒ 75%
             target: { st: 0.8, continuation: 0.75 },
-            board: { hesoWidth: 8.5 }    // 釘: ヘソを 少し しめる (1000円で 約16回転)
+            // 設定 1〜6 の 釘 (1000円で 約 13 〜 21 回転)
+            settings: [{ hesoWidth: 7.7, heso: 0.052 }, { hesoWidth: 7.95, heso: 0.059 }, { hesoWidth: 8.8, heso: 0.066 },
+                { hesoWidth: 9.3, heso: 0.073 }, { hesoWidth: 9.9, heso: 0.08 }, { hesoWidth: 10.5, heso: 0.087 }]
         }
     },
 

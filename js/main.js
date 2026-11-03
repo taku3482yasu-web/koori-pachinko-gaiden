@@ -5,7 +5,7 @@
 // 電チュー・アタッカーの 開け閉めを 盤面に → 液晶・筐体・音。
 // 操作: 発射 (タップで 発射 / 停止・Space)・強さ (ゲージ・← →)・左打ち / 右打ち・台の ボタン PUSH (B)・金棒レバー (L・右横を 左へ 引く)
 // URL (確認用): ?spec=s319 (台えらびを とばす) &auto=1 (自動で 打つ。台に 合わせて 左右も) &skip=30 (はじめに 30 秒 早送り)
-//   &balls=9999 &force=hit|st|jitan|reach|fall (はじめの 保留) &enemy=kanezu (ST の 相手) &debug=1 (デバッグの ボタン)
+//   &setting=6 (設定。はぶくと 設定4) &senbare=voice|roar (柱の氷RASH の 先バレ) &balls=9999 &force=hit|st|jitan|reach|fall (はじめの 保留) &enemy=kanezu (ST の 相手) &debug=1 (デバッグの ボタン)
 // =====================================================================
 
 (() => {
@@ -33,17 +33,21 @@
     Lcd.init();
 
     // ----- 台を 用意する -----
-    function startMachine(specId) {
+    // setting: 設定 1〜6 (釘が かわる) / settingKnown: 自分で えらんだか (おまかせの ときは 画面に 出さない)
+    function startMachine(specId, setting, settingKnown) {
         const spec = CONFIG.specs[specId];
         game.specId = specId;
+        game.setting = setting;
+        game.settingKnown = settingKnown;
+        game.hints = [];
         game.machine = Machine.create(CONFIG, specId);
         Machine.setRashType(game.machine, store.get('rash', 'onioni'));
-        game.board = Board.build(CONFIG, spec.board || {});
+        game.board = Board.build(CONFIG, spec.settings[setting - 1]);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
         game.view = BoardView.create(canvas, game.board, CONFIG);
         Cabinet.init($('cabinet-art'), BoardView.outline(game.board));
         Cabinet.place(canvas, Cabinet.CAB.board);
-        $('spec-display').textContent = `${spec.label} ${spec.name}`;
+        $('spec-display').textContent = `${spec.label} ${spec.name}${settingKnown ? ` / 設定${setting}` : ''}`;
         game.paused = false;
         game.record.plays++;
         store.set('record', game.record);
@@ -52,7 +56,7 @@
             next: force === 'hitJitan' ? 'jitan' : 'st', enemy: params.get('enemy'), yaku: params.get('yaku') === '1',
             reach: params.get('reach') || undefined, gun: params.has('gun') ? params.get('gun') === '1' : undefined,
             battle: params.get('battle') === '1', ally: params.get('ally') || undefined, attack: params.get('attack') || undefined,
-            shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined
+            shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined
         };
         if (force === 'st' || force === 'jitan' || force === 'hst') Machine.debugMode(game.machine, force);
         else if (force === 'stHit' || force === 'fall') { Machine.debugMode(game.machine, 'st'); Machine.debugHold(game.machine, force === 'fall' ? 'fall' : 'hit', opt); }
@@ -108,7 +112,10 @@
     function machineEvent(e) {
         const m = game.machine;
         Lcd.handle(e, m);
-        if (e.type === 'hold') Sound.play(e.result.senbare && m.mode === 'hst' ? 'senbare' : 'hold');
+        if (e.type === 'hold') {
+            if (e.result.senbare && m.mode === 'hst') senbare(e.result.senbare);
+            else Sound.play('hold');
+        }
         else if (e.type === 'spinStart') { Sound.play('stop'); schedule(e.plan, e.duration); }
         else if (e.type === 'spinEnd') { if (e.result.kind === 'hit') Sound.play('win'); }
         else if (e.type === 'bonusStart') {
@@ -118,7 +125,8 @@
         } else if (e.type === 'roundStart') Sound.play('round');
         else if (e.type === 'bonusEnd') closeRashChoice();
         else if (e.type === 'stStart' && e.entry) Sound.play('stIn');
-        else if (e.type === 'stEnd') Sound.play('fall');
+        else if (e.type === 'stEnd') { Sound.play('fall'); settingHint(); }
+        else if (e.type === 'jitanEnd') settingHint();
         else if (e.type === 'chainEnd') {
             game.record.bestChain = Math.max(game.record.bestChain, e.chain);
             game.record.bestBalls = Math.max(game.record.bestBalls, e.balls);
@@ -155,7 +163,7 @@
             else if (plan.sub === 'battle') {
                 const x = plan.shuketsu ? 1.5 : 0;
                 at(0.8, 'cutin');
-                if (plan.shuketsu) [0.8, 1.3, 1.8].forEach(t => at(t, 'clash'));
+                if (plan.shuketsu) { [0.8, 1.3, 1.8].forEach(t => at(t, 'clash')); at(2.2, 'vibratePush'); }
                 if (plan.ally !== 'rival' || plan.shuketsu) at(2.0, 'chance');
                 at(2.8 + x + 1.4, plan.attack === 'ichigeki' ? 'smash' : 'chance');
                 at(D - 3.0, plan.hit ? 'gekiha' : 'lose');
@@ -163,7 +171,43 @@
         }
     }
     function playCues() {
-        while (cues.length && cues[0].t <= time) Sound.play(cues.shift().name);
+        while (cues.length && cues[0].t <= time) {
+            const name = cues.shift().name;
+            if (name === 'vibratePush') vibrate('push');
+            else Sound.play(name);
+        }
+    }
+
+    // 設定示唆: RASH・時短が 終わった とき、ときどき 液晶の 左下に トロフィー (色で「設定○以上」)
+    function settingHint() {
+        const h = CONFIG.settingHint;
+        if (Math.random() >= h.rate) return;
+        const w = h.weights[game.setting];
+        let r = Math.random() * Object.values(w).reduce((a, b) => a + b, 0);
+        let level = 1;
+        for (const [k, v] of Object.entries(w)) if ((r -= v) < 0) { level = Number(k); break; }
+        game.hints.push(level);
+        Lcd.trophy(level);
+    }
+
+    // 先バレ (2026-11-04 ユーザー指定): voice = 前作の 先バレ音を 低く した もの / roar = おにおにの 先咆哮。どちらも ボタンが 赤く 光る
+    function senbare(kind) {
+        Sound.play(kind === 'roar' ? 'senbareRoar' : 'senbareVoice');
+        flashClass($('push'), 'red', kind === 'roar' ? 2200 : 1400);
+    }
+    // ボタン・レバーが 震える (2026-11-04 ユーザー指定: 動画を 参考に): モーターの ような 速い ぶるぶる (CSS の vibrate) と ヴヴヴヴ… (Sound の buzz)。
+    // スマホは 本体も ふるわせる
+    function vibrate(which) {
+        flashClass($(which), 'vibrate', 1300);
+        Sound.play('buzz');
+        try { if (navigator.vibrate) navigator.vibrate([280, 40, 280, 40, 560]); } catch (e) { /* ふるえない 端末 */ }
+    }
+    const flashTimers = new Map();
+    function flashClass(el, cls, ms) {
+        const key = el.id + cls;
+        clearTimeout(flashTimers.get(key));
+        el.classList.add(cls);
+        flashTimers.set(key, setTimeout(() => el.classList.remove(cls), ms));
     }
 
     // RASH えらび (2026-11-04 ユーザー指定: ST を おにおにRASH と 柱の氷RASH に 分ける)。ST へ 行く 大当たりの あいだに えらぶ。1 / 2 キーでも
@@ -200,6 +244,7 @@
     }
 
     // ----- 表示 -----
+    let lastPrompt = null;
     function updateStatus() {
         const m = game.machine;
         $('balls').textContent = game.balls;
@@ -218,6 +263,11 @@
         const p = Lcd.prompt();
         $('push').classList.toggle('glow', p === 'push');
         $('lever').classList.toggle('glow', p === 'lever');
+        // 「金棒レバーを 引け！」が 出た しゅんかんに レバーが 震える (レバブル)
+        if (p !== lastPrompt) {
+            if (p === 'lever') vibrate('lever');
+            lastPrompt = p;
+        }
         if (params.get('debug') === '1') {
             const s = m.stats;
             $('debug-stats').textContent = `初当たり ${s.firstHits} / ST突入 ${s.stEntries} / ST当たり ${s.stHits} / 転落 ${s.falls} / 時短 ${s.jitanEntries} (引き戻し ${s.jitanHits}) / 最高 ${s.bestChain}連 / 保留 ${m.holds[1].length}+${m.holds[2].length}`;
@@ -309,7 +359,12 @@
     $('machine-button').addEventListener('click', () => { game.paused = true; setFire(false); $('picker').hidden = false; });
     $('data-button').addEventListener('click', () => {
         const r = game.record, m = game.machine, s = m.stats;
+        const colors = CONFIG.settingHint.colors;
+        const seen = [1, 2, 3, 4, 5, 6].map(l => `${colors[l].name} ${game.hints.filter(x => x === l).length}`).join('・');
+        const rate = game.stats.launchedLeft > 50 ? (game.stats.heso / game.stats.launchedLeft * 250).toFixed(1) : '-';
         $('data-body').innerHTML = `<p>この台: 初当たり ${s.firstHits} 回・ST 突入 ${s.stEntries} 回・ST の 撃破 ${s.stHits} 回・転落 ${s.falls} 回・最高 ${s.bestChain} 連</p>`
+            + `<p>設定: ${game.settingKnown ? `設定${game.setting}` : '？ (おまかせ)'}・回転率 ${rate} (1000円あたり)<br>トロフィー: ${seen}<br>`
+            + `<small>白 = どの 設定でも・青 = 2 以上・緑 = 3 以上・紫 = 4 以上・赤 = 5 以上・虹 = 6 確定</small></p>`
             + `<p>これまで: 初当たり ${r.firstHits} 回・最高 ${r.bestChain} 連・最高 ${r.bestBalls} 個</p>`;
         $('data-panel').hidden = false;
     });
@@ -327,11 +382,22 @@
     });
     $('lever').addEventListener('keypull', () => { const el = $('lever'); el.classList.add('pulled'); el.style.setProperty('--lever-angle', '-42deg'); setTimeout(() => { el.style.setProperty('--lever-angle', '0deg'); el.classList.remove('pulled'); }, 260); lever(); });
 
-    // 台えらび
+    // 台えらび (設定を えらんでから 台を 押す)
+    let chosenSetting = store.get('setting', 'random');
+    function markSetting() {
+        document.querySelectorAll('[data-setting]').forEach(b => b.classList.toggle('selected', b.dataset.setting === String(chosenSetting)));
+    }
+    document.querySelectorAll('[data-setting]').forEach(b => b.addEventListener('click', () => {
+        chosenSetting = b.dataset.setting === 'random' ? 'random' : Number(b.dataset.setting);
+        store.set('setting', chosenSetting);
+        markSetting();
+    }));
+    markSetting();
     document.querySelectorAll('[data-spec]').forEach(b => b.addEventListener('click', () => {
         Sound.unlock();
         $('picker').hidden = true;
-        startMachine(b.dataset.spec);
+        const random = chosenSetting === 'random';
+        startMachine(b.dataset.spec, random ? 1 + Math.floor(Math.random() * 6) : chosenSetting, !random);
     }));
 
     // デバッグ
@@ -354,7 +420,8 @@
     setStrength(game.strength);
     if (params.has('spec') && CONFIG.specs[params.get('spec')]) {
         $('picker').hidden = true;
-        startMachine(params.get('spec'));
+        const setting = Math.min(6, Math.max(1, Number(params.get('setting')) || 4));
+        startMachine(params.get('spec'), setting, params.has('setting'));
         const skip = Number(params.get('skip')) || 0;
         for (let i = 0; i < skip * 60; i++) tick(1 / 60);
     }

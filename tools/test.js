@@ -4,7 +4,9 @@
 // 盤面の 物理は 使わず、玉の 行き先を きまった 割合 (RATES) で きめて 台を 長い 時間 まわす。乱数は 種を 固定。
 //   node tools/test.js               すべての テスト
 //   node tools/test.js --hours 2000  台を まわす 時間 (1 スペック あたり)
-//   node tools/test.js --flow        盤面の 物理も しらべる (遅い)
+//   node tools/test.js --setting 6   台の 設定 (ヘソの 入りやすさ。ふだんは 設定4)
+//   node tools/test.js --settings    設定 1〜6 の 出玉率だけ しらべる (遅い)
+//   node tools/test.js --sweep 0.05,0.1  ヘソに 入る 割合ごとの 出玉率 (設定の 数を きめる ため)
 // 失敗が あると 終了コード 1
 // =====================================================================
 const fs = require('fs');
@@ -15,6 +17,7 @@ const ROOT = path.join(__dirname, '..');
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => { const i = args.indexOf(`--${name}`); return i >= 0 ? Number(args[i + 1]) : fallback; };
 const HOURS = argOf('hours', 400);
+const SETTING = argOf('setting', 4);
 const SEED = argOf('seed', 20261103);
 
 function seeded(seed) {
@@ -47,10 +50,11 @@ const { CONFIG, Machine, Show, SHOW } = G;
 
 // 玉の 行き先の 割合 (1 発 あたり)。tools/flow.js で しらべた 数に 近い
 const RATES = {
-    // ヘソは 台ごとの 釘 (spec.board.hesoWidth) で かわる (tools/flow.js で しらべた 数)
-    left: { heso: { s319: argOf('heso', 0.089), s399: argOf('heso', 0.063) }, general: 0.005 },
+    // ヘソは 設定ごとの 釘 (spec.settings[].hesoWidth) で かわる。入る 割合は tools/flow.js で しらべた 数 (spec.settings[].heso)
+    left: { general: 0.005 },
     right: { gate: 0.95, denchu: 0.85, attacker: 0.9 }
 };
+const hesoRate = (specId, setting = SETTING) => argOf('heso', CONFIG.specs[specId].settings[setting - 1].heso);
 
 // ----- 1. ST の 相手と 撃破率 -----
 console.log('■ ST の 相手と 撃破率');
@@ -96,7 +100,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
 }
 
 // ----- 2. 台を 長い 時間 まわす -----
-function run(specId, hours, seed, rash = 'onioni') {
+function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
     const rng = seeded(seed);
     const m = Machine.create(CONFIG, specId, rng);
     Machine.setRashType(m, rash);
@@ -116,8 +120,8 @@ function run(specId, hours, seed, rash = 'onioni') {
             if (aim === 'left') normalTime += CONFIG.launch.interval;
             const r = rng();
             if (aim === 'left') {
-                if (r < RATES.left.heso[specId]) { Machine.enter(m, 'heso'); inBalls += payout.heso; }
-                else if (r < RATES.left.heso[specId] + RATES.left.general) inBalls += payout.general;
+                if (r < heso) { Machine.enter(m, 'heso'); inBalls += payout.heso; }
+                else if (r < heso + RATES.left.general) inBalls += payout.general;
             } else if (m.parts.attacker) {
                 if (r < RATES.right.attacker) { Machine.enter(m, 'attacker'); inBalls += payout.attacker; curBonus += payout.attacker; }
             } else if (m.parts.denchu) {
@@ -134,7 +138,39 @@ function run(specId, hours, seed, rash = 'onioni') {
     return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime };
 }
 
-console.log(`■ 台を まわす (${HOURS} 時間ずつ)`);
+const rotation = r => r.m.stats.spins1 / (r.normalTime / CONFIG.launch.interval) * 250;
+
+// ----- 設定 (2026-11-04 ユーザー指定: 前作と おなじく 設定 1〜6 を 釘で つける) -----
+if (args.includes('--sweep')) {
+    const list = args[args.indexOf('--sweep') + 1].split(',').map(Number);
+    for (const specId of Object.keys(CONFIG.specs)) for (const h of list) {
+        const r = run(specId, HOURS, SEED, 'onioni', h);
+        console.log(`${CONFIG.specs[specId].label} ヘソ ${h}: 出玉率 ${pct(r.inBalls / r.out)}・${rotation(r).toFixed(1)} 回転`);
+    }
+    process.exit(0);
+}
+if (args.includes('--settings')) {
+    console.log(`■ 設定ごとの 出玉率 (${HOURS} 時間ずつ)`);
+    for (const specId of Object.keys(CONFIG.specs)) {
+        const spec = CONFIG.specs[specId];
+        let prev = 0;
+        spec.settings.forEach((st, i) => {
+            const r = run(specId, HOURS, SEED + i, 'onioni', st.heso);
+            const rtp = r.inBalls / r.out;
+            check(near(rtp, CONFIG.settingRtp[i], 0.06) && rtp > prev, `${spec.label} 設定${i + 1}: 出玉率 ${pct(rtp)} (目標 ${pct(CONFIG.settingRtp[i])})・${rotation(r).toFixed(1)} 回転`);
+            prev = rtp;
+        });
+    }
+    console.log(failed ? `\n${failed} 件 失敗` : '\nぜんぶ ok');
+    process.exit(failed ? 1 : 0);
+}
+// 設定は 高い ほど ヘソが 入りやすい
+for (const specId of Object.keys(CONFIG.specs)) {
+    const st = CONFIG.specs[specId].settings;
+    check(st.length === 6 && st.every((s, i) => i === 0 || (s.hesoWidth > st[i - 1].hesoWidth && s.heso > st[i - 1].heso)), `${CONFIG.specs[specId].label}: 設定 1〜6 の 釘`);
+}
+
+console.log(`■ 台を まわす (${HOURS} 時間ずつ・設定${SETTING})`);
 for (const specId of Object.keys(CONFIG.specs)) {
     const spec = CONFIG.specs[specId];
     const r = run(specId, HOURS, SEED);
@@ -154,7 +190,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const perFirst = avgBonus * avgChain;
     console.log(`      平均 連チャン ${avgChain.toFixed(2)} 回・初当たり 1 回の 出玉 ${perFirst.toFixed(0)} 個・最高 ${s.bestChain} 連・時短で 引き戻し ${s.jitanHits}/${s.jitanEntries}`);
     const rtp = r.inBalls / r.out;
-    console.log(`      出玉率 ${pct(rtp)} (打った ${r.out}・もどった ${r.inBalls})・1000円 (250発) あたり ${(spinsN / (r.normalTime / CONFIG.launch.interval) * 250).toFixed(1)} 回転`);
+    console.log(`      出玉率 ${pct(rtp)} (打った ${r.out}・もどった ${r.inBalls})・1000円 (250発) あたり ${rotation(r).toFixed(1)} 回転`);
     r.perFirst = perFirst;
     module.exports[specId] = r;
 }
@@ -209,12 +245,13 @@ console.log('■ 演出');
         const p = Show.plan(CONFIG, m, { fig: 2, result, holdsLeft: 0 }, rng);
         const h = hit ? 'hit' : 'miss';
         add(h, 'n');
-        if (result.senbare) add(h, 'senbare');
+        if (result.senbare) { add(h, 'senbare'); add(h, 'sb_' + result.senbare); }
         add(h, p.sub);
         if (p.sub === 'battle') { add(h, p.attack); if (p.shuketsu) add(h, 'shuketsu'); if (p.ally !== 'rival') add(h, 'allyChance'); }
     }
     const trust = k => { const a = (c.hit[k] || 0), b = (c.miss[k] || 0); return a / (a + b); };
     check(trust('senbare') > 0.75, `先バレの 信頼度 ${pct(trust('senbare'))}`);
+    check(trust('sb_roar') > trust('sb_voice') && trust('sb_voice') > 0.7, `先咆哮 ${pct(trust('sb_roar'))} は 先バレ音 ${pct(trust('sb_voice'))} より アツい`);
     check(trust('ippatsu') === 1, '一発告知は かならず 当たり');
     check(trust('ichigeki') > trust('rengeki'), `一撃 ${pct(trust('ichigeki'))} は 連撃 ${pct(trust('rengeki'))} より 期待度が 高い`);
     check(trust('shuketsu') > 0.6, `柱の氷 集結 ${pct(trust('shuketsu'))} は 大チャンス`);
