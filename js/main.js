@@ -5,7 +5,7 @@
 // 電チュー・アタッカーの 開け閉めを 盤面に → 液晶・筐体・音。
 // 操作: 発射 (タップで 発射 / 停止・Space)・強さ (ゲージ・← →)・左打ち / 右打ち・台の ボタン PUSH (B)・金棒レバー (L・右横を 左へ 引く)
 // URL (確認用): ?spec=s319 (台えらびを とばす) &auto=1 (自動で 打つ。台に 合わせて 左右も) &skip=30 (はじめに 30 秒 早送り)
-//   &setting=6 (設定。はぶくと 設定4) &senbare=voice|roar (柱の氷RASH の 先バレ) &balls=9999 &force=hit|st|jitan|reach|fall (はじめの 保留) &enemy=kanezu (ST の 相手) &debug=1 (デバッグの ボタン)
+//   &pay=full|base|uwanose &uwanose=1|0 (1/399 の RASH の 出玉・上乗せの 成否) &setting=6 (設定。はぶくと 設定4) &senbare=voice|roar (柱の氷RASH の 先バレ) &balls=9999 &force=hit|st|jitan|reach|fall (はじめの 保留) &enemy=kanezu (ST の 相手) &debug=1 (デバッグの ボタン)
 // =====================================================================
 
 (() => {
@@ -56,7 +56,8 @@
             next: force === 'hitJitan' ? 'jitan' : 'st', enemy: params.get('enemy'), yaku: params.get('yaku') === '1',
             reach: params.get('reach') || undefined, gun: params.has('gun') ? params.get('gun') === '1' : undefined,
             battle: params.get('battle') === '1', ally: params.get('ally') || undefined, attack: params.get('attack') || undefined,
-            shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined
+            shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
+            pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined
         };
         if (force === 'st' || force === 'jitan' || force === 'hst') Machine.debugMode(game.machine, force);
         else if (force === 'stHit' || force === 'fall') { Machine.debugMode(game.machine, 'st'); Machine.debugHold(game.machine, force === 'fall' ? 'fall' : 'hit', opt); }
@@ -123,6 +124,10 @@
             if (e.next === 'st') openRashChoice();
             if (e.from === 'normal') { game.record.firstHits++; game.chainStartBalls = game.balls; }
         } else if (e.type === 'roundStart') Sound.play('round');
+        else if (e.type === 'uwanoseStart') Sound.play('chance');
+        else if (e.type === 'iwakan') { Sound.play('iwakan'); Sound.hush(900); }
+        else if (e.type === 'uwanose') { Sound.play('gekiha'); Sound.play('fanfare'); }
+        else if (e.type === 'uwanoseEnd') Sound.play('lose');
         else if (e.type === 'bonusEnd') closeRashChoice();
         else if (e.type === 'stStart' && e.entry) Sound.play('stIn');
         else if (e.type === 'stEnd') { Sound.play('fall'); settingHint(); }

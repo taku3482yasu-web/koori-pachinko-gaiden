@@ -6,7 +6,8 @@
 //   時短:   確率は 通常時と 同じ。電サポで 右打ち。当たれば ST。jitanSpins 回 まわして 当たらなければ 通常時
 //   ST:     回数の かぎりなし。1 回転ごとに 大当たり (st.hitRate)・転落 (st.fallRate)・はずれ を 抽選。
 //           大当たり → ラウンドの あと また ST / 転落 → 通常時へ (おにおにが たおされる)
-//   大当たりは いつも spec.rounds ラウンド (1/319 は 3R・1/399 は 10R)
+//   大当たりは spec.rounds ラウンド (1/319 は いつも 3R)。spec.payout が ある 台 (1/399) は 初当たり 20R・RASH 中は 振り分け、
+//   上乗せタイム (spec.uwanose) が 成功すると ラウンドが ふえる (できごと uwanoseStart → iwakan → uwanose / uwanoseEnd)
 //   ST は 2 つ (2026-11-04 ユーザー指定)。ST に 入る 大当たりの あいだに えらぶ (m.rashType。Machine.setRashType):
 //     おにおにRASH ('onioni'。mode 'st'): 上の 転落型
 //     柱の氷RASH ('hashira'。mode 'hst'): 前作と 同じ ST 型。spec.hashira.spins 回 (100 回) の あいだ spec.hashira.hitRate で 当たりを ねらう。
@@ -196,20 +197,57 @@ const Machine = (() => {
         m.stats.bestChain = Math.max(m.stats.bestChain, m.chain);
         m.mode = 'bonus';
         m.jitanLeft = 0;
-        const rounds = m.spec.rounds;
-        m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.opening, next: result.next, from, fig };
+        let rounds = m.spec.rounds, payKind = null, uwanose = null;
+        const pay = m.spec.payout;
+        if (pay && from === 'normal') { rounds = pay.first; payKind = 'first'; }
+        else if (pay) {
+            const k = (result.forcePay && pay.rash.find(x => x.id === result.forcePay)) || weightedPick(pay.rash, m.rng);
+            rounds = k.rounds;
+            payKind = k.id;
+            if (k.uwanose) {
+                const u = m.spec.uwanose, rnd = (a, b) => a + (b - a) * m.rng();
+                uwanose = {
+                    round: u.rounds[0] + Math.floor(m.rng() * (u.rounds[1] - u.rounds[0] + 1)),
+                    success: result.forceUwanose !== undefined ? result.forceUwanose : m.rng() < u.success,
+                    iwakanAt: rnd(u.iwakan[0], u.iwakan[1]), phase: 'wait', t: 0, iwakan: false
+                };
+            }
+        }
+        m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.opening, next: result.next, from, fig, payKind, uwanose };
         m.stats.bonusRounds += rounds;
-        emit(m, 'bonusStart', { rounds, next: result.next, from, chain: m.chain, fig, plan: result.plan || null });
+        emit(m, 'bonusStart', { rounds, next: result.next, from, chain: m.chain, fig, plan: result.plan || null, payKind });
+    }
+
+    // 上乗せタイム (window 秒)。成功なら iwakanAt 秒に 違和感 → reveal 秒 あとに ラウンドが ふえる
+    function updateUwanose(m, dt) {
+        const b = m.bonus, u = b.uwanose, cfg = m.spec.uwanose;
+        if (!u || u.phase !== 'time') return;
+        u.t += dt;
+        if (u.success && !u.iwakan && u.t >= u.iwakanAt) {
+            u.iwakan = true;
+            emit(m, 'iwakan', {});
+        }
+        if (u.success && u.iwakan && u.t >= u.iwakanAt + cfg.reveal) {
+            u.phase = 'done';
+            b.rounds += cfg.addRounds;
+            m.stats.bonusRounds += cfg.addRounds;
+            m.stats.uwanose = (m.stats.uwanose || 0) + 1;
+            emit(m, 'uwanose', { add: cfg.addRounds, rounds: b.rounds });
+        } else if (!u.success && u.t >= cfg.window) {
+            u.phase = 'done';
+            emit(m, 'uwanoseEnd', { success: false });
+        }
     }
 
     function updateBonus(m, dt) {
         const cfg = m.config.machine.bonus;
         const b = m.bonus;
         b.timer -= dt;
+        updateUwanose(m, dt);
         if (b.phase === 'open') {
             if (b.count < cfg.count && b.timer > 0) return;
             emit(m, 'roundEnd', { round: b.round, count: b.count });
-            if (b.round >= b.rounds) {
+            if (b.round >= b.rounds && !(b.uwanose && b.uwanose.phase === 'time')) {
                 b.phase = 'ending';
                 b.timer = cfg.ending;
                 emit(m, 'ending', { next: b.next, chain: m.chain, from: b.from });
@@ -226,6 +264,10 @@ const Machine = (() => {
             b.phase = 'open';
             b.timer = cfg.maxTime;
             emit(m, 'roundStart', { round: b.round, rounds: b.rounds });
+            if (b.uwanose && b.uwanose.phase === 'wait' && b.round >= b.uwanose.round) {
+                b.uwanose.phase = 'time';
+                emit(m, 'uwanoseStart', { window: m.spec.uwanose.window });
+            }
         } else if (b.phase === 'ending') {
             m.bonus = null;
             if (b.next === 'st') {
@@ -327,6 +369,8 @@ const Machine = (() => {
         addShow(m, fig, result);
         if (options.holdColor) result.holdColor = result.shownColor = options.holdColor;
         if (options.senbare) result.senbare = options.senbare;
+        if (options.pay) result.forcePay = options.pay;
+        if (options.uwanose !== undefined) result.forceUwanose = options.uwanose;
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });

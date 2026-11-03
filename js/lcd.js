@@ -450,11 +450,24 @@ const Lcd = (() => {
         } else if (e.type === 'spinEnd') {
             st.last = { plan: e.plan, result: e.result, at: st.now };
         } else if (e.type === 'bonusStart') {
-            st.bonus = { rounds: e.rounds, round: 0, count: 0, next: e.next, from: e.from, chain: e.chain, start: st.now };
+            st.bonus = { rounds: e.rounds, round: 0, count: 0, next: e.next, from: e.from, chain: e.chain, start: st.now, payKind: e.payKind };
+            st.uwanose = null;
             st.ending = null;
             st.flash = 0.6;
             // 大当たりの はじまりに ときどき 役物 (初当たりは かならず どれか)
             if (e.from === 'normal' || Math.random() < 0.35) startGimmick(e.from === 'normal' ? 'pillars' : 'kanabo', 3.2);
+        } else if (e.type === 'uwanoseStart') {
+            st.uwanose = { start: st.now, window: e.window, state: 'time' };
+        } else if (e.type === 'iwakan') {
+            if (st.uwanose) { st.uwanose.state = 'iwakan'; st.uwanose.iwakan = st.now; }
+        } else if (e.type === 'uwanose') {
+            if (st.uwanose) { st.uwanose.state = 'win'; st.uwanose.end = st.now; }
+            if (st.bonus) st.bonus.rounds = e.rounds;
+            st.flash = 1;
+            st.shake = 0.6;
+            startGimmick('kanabo', 2.4);
+        } else if (e.type === 'uwanoseEnd') {
+            if (st.uwanose) { st.uwanose.state = 'lose'; st.uwanose.end = st.now; }
         } else if (e.type === 'roundStart') {
             if (st.bonus) { st.bonus.round = e.round; st.bonus.count = 0; }
         } else if (e.type === 'count') {
@@ -843,6 +856,8 @@ const Lcd = (() => {
             const odd = fig[0] % 2 === 1;
             if (b.from === 'normal') text(odd ? 'ST 確定！' : '時短 チャンス', W / 2, 122, 11, odd ? '#ff6a8a' : '#7ad8ff', 'center', { bold: true });
             else if (b.from === 'st') text(`${b.chain}連 撃破！`, W / 2, 122, 11, '#ffd84a', 'center', { bold: true });
+            // 出玉 (1/399): 3000発 / 1500発
+            if (b.payKind) text(`${b.rounds * 150}発`, W / 2, 108, 12, b.rounds >= 20 ? 'rainbow' : '#ffffff', 'center', { bold: true });
             return;
         }
         // ラウンド中: ストーリーの 絵 (ラウンドごとに すすむ)
@@ -854,6 +869,42 @@ const Lcd = (() => {
         text(`${m.bonus ? m.bonus.count : 0} / 10`, W - 6, 7, 9, '#ffffff', 'right');
         text('右打ち →', W - 6, H - 8, 9, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff', 'right');
         if (m.chain >= 2) text(`${m.chain}連`, 6, H - 8, 10, '#ffd84a', 'left', { bold: true });
+        drawUwanose(now);
+    }
+
+    // 上乗せタイム (1/399 の RASH 中の 大当たり): のこり 秒の ゲージ。違和感 (液晶が ブツッと 消える) が 起きたら 成功 → +1500発
+    function drawUwanose(now) {
+        const u = st.uwanose;
+        if (!u) return;
+        if (u.state === 'time') {
+            const left = Math.max(0, u.window - (now - u.start));
+            ctx.fillStyle = 'rgba(40,0,60,0.7)';
+            ctx.fillRect(0, 16, W, 30);
+            text('上乗せタイム', W / 2 - 40, 26, 13, Math.floor(now * 4) % 2 ? '#ffd84a' : '#ff6a8a', 'center', { bold: true });
+            text(`${Math.ceil(left)}`, W / 2 + 46, 30, 22, '#ffffff', 'center', { bold: true });
+            ctx.fillStyle = '#ffd84a';
+            ctx.fillRect(10, 41, (W - 20) * left / u.window, 3);
+            text('違和感が 起きたら 上乗せ！', W / 2, 52, 8, '#ffffff');
+        } else if (u.state === 'iwakan') {
+            // 違和感: 液晶が ブツッと 消えて ノイズ
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, W, H);
+            for (let i = 0; i < 40; i++) {
+                ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#555566';
+                ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 20, 1);
+            }
+        } else {
+            const k = now - u.end;
+            if (k > 3) { st.uwanose = null; return; }
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(0, H / 2 - 30, W, 56);
+            if (u.state === 'win') {
+                text('上乗せ！', W / 2, H / 2 - 14, 22 * (0.6 + 0.4 * ease(k * 3)), 'rainbow', 'center', { bold: true });
+                text('+1500発', W / 2, H / 2 + 12, 18, '#ffd84a', 'center', { bold: true });
+            } else {
+                text('上乗せ ならず…', W / 2, H / 2 - 2, 16, '#9ab0d0', 'center', { bold: true });
+            }
+        }
     }
 
     // 大当たりの ラウンド中に 流れる ストーリー

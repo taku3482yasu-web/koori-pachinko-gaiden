@@ -109,7 +109,8 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
     const payout = CONFIG.payout;
     const chains = [];
     const bonusBalls = [];
-    let curBonus = 0, firstKinds = { st: 0, jitan: 0 };
+    let curBonus = 0, curFrom = null, firstKinds = { st: 0, jitan: 0 };
+    const uw = { n: 0, win: 0, lose: 0 };
     let normalTime = 0;
     while (t < hours * 3600) {
         t += dt;
@@ -131,11 +132,15 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
         Machine.update(m, dt);
         for (const e of m.events.splice(0)) {
             if (e.type === 'bonusStart' && e.from === 'normal' && e.fig === 1) firstKinds[e.next]++;   // ヘソの 初当たり (電チューの 残り保留の 当たりは ST)
-            if (e.type === 'bonusEnd') { bonusBalls.push(curBonus); curBonus = 0; }
+            if (e.type === 'bonusStart') curFrom = e.from;
+            if (e.type === 'bonusEnd') { bonusBalls.push({ balls: curBonus, from: curFrom }); curBonus = 0; }
+            if (e.type === 'uwanoseStart') uw.n++;
+            if (e.type === 'uwanose') uw.win++;
+            if (e.type === 'uwanoseEnd') uw.lose++;
             if (e.type === 'chainEnd') chains.push(e.chain);
         }
     }
-    return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime };
+    return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime, uw };
 }
 
 const rotation = r => r.m.stats.spins1 / (r.normalTime / CONFIG.launch.interval) * 250;
@@ -183,11 +188,30 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const spinsN = s.spins1;
     const firstRate = spinsN / Math.max(1, s.firstHits);
     check(firstRate > 1 / spec.hitRate * 0.75 && firstRate < 1 / spec.hitRate * 1.35, `${spec.label}: 初当たり 1/${firstRate.toFixed(0)} (回転 ${spinsN}・初当たり ${s.firstHits})`);
-    const avgBonus = r.bonusBalls.reduce((a, b) => a + b, 0) / r.bonusBalls.length;
-    const expect = spec.rounds * CONFIG.machine.bonus.count * CONFIG.payout.attacker;
-    check(near(avgBonus, expect, expect * 0.08), `${spec.label}: 1 回の 大当たりの 出玉 ${avgBonus.toFixed(0)} 個 (${spec.rounds}R)`);
+    // 1 回の 大当たりの 出玉 (1R = 10C x 賞球)。spec.payout が ある 台は 初当たりと RASH 中で わける
+    const perRound = CONFIG.machine.bonus.count * CONFIG.payout.attacker;
+    const avgOf = list => list.reduce((a, b) => a + b.balls, 0) / Math.max(1, list.length);
+    const pay = spec.payout;
+    const firstBonus = r.bonusBalls.filter(b => b.from === 'normal'), rashBonus = r.bonusBalls.filter(b => b.from !== 'normal');
+    const expFirst = (pay ? pay.first : spec.rounds) * perRound;
+    let expRash = spec.rounds * perRound;
+    if (pay) {
+        const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
+        expRash = pay.rash.reduce((a, k) => a + k.weight / tw * (k.rounds + (k.uwanose ? spec.uwanose.success * spec.uwanose.addRounds : 0)), 0) * perRound;
+    }
+    check(near(avgOf(firstBonus), expFirst, expFirst * 0.02), `${spec.label}: 初当たりの 出玉 ${avgOf(firstBonus).toFixed(0)} 個 (目標 ${expFirst})`);
+    check(near(avgOf(rashBonus), expRash, expRash * 0.05), `${spec.label}: RASH・時短の 大当たりの 出玉 ${avgOf(rashBonus).toFixed(0)} 個 (目標 ${expRash.toFixed(0)})`);
+    if (pay) {
+        const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
+        const share = r.uw.n / rashBonus.length, expShare = pay.rash.filter(k => k.uwanose).reduce((a, k) => a + k.weight, 0) / tw;
+        check(near(share, expShare, 0.05), `${spec.label}: 上乗せタイムの 発生 ${pct(share)} (目標 ${pct(expShare)})`);
+        check(r.uw.win + r.uw.lose === r.uw.n && near(r.uw.win / r.uw.n, spec.uwanose.success, 0.06), `${spec.label}: 上乗せタイムの 成功 ${pct(r.uw.win / r.uw.n)} (${r.uw.win}/${r.uw.n})`);
+        const counts = {};
+        rashBonus.forEach(b => { counts[b.balls] = (counts[b.balls] || 0) + 1; });
+        console.log(`      RASH・時短の 出玉: ${Object.entries(counts).map(([k, v]) => `${k}個 ${pct(v / rashBonus.length)}`).join('・')}`);
+    }
     const avgChain = r.chains.reduce((a, b) => a + b, 0) / r.chains.length;
-    const perFirst = avgBonus * avgChain;
+    const perFirst = r.bonusBalls.reduce((a, b) => a + b.balls, 0) / r.chains.length;
     console.log(`      平均 連チャン ${avgChain.toFixed(2)} 回・初当たり 1 回の 出玉 ${perFirst.toFixed(0)} 個・最高 ${s.bestChain} 連・時短で 引き戻し ${s.jitanHits}/${s.jitanEntries}`);
     const rtp = r.inBalls / r.out;
     console.log(`      出玉率 ${pct(rtp)} (打った ${r.out}・もどった ${r.inBalls})・1000円 (250発) あたり ${rotation(r).toFixed(1)} 回転`);

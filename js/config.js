@@ -110,7 +110,7 @@ const CONFIG = {
 
     // ----- スペック (2026-11-03 ユーザー指定) -----
     //   1/319: 大当たりは いつも 3R (約 450個)。初当たりの 50% が ST、50% が 時短 100回 (確率は 1/319 の まま・当たれば ST)。ST の 継続率 約 80%
-    //   1/399: 大当たりは いつも 10R (約 1500個)。初当たりの 80% が ST、20% が 時短 100回。ST の 継続率 約 75% (出玉は 1/399 の ほうが 多め)
+    //   1/399: 初当たりは 3000発 (20R)。RASH 中は 3000発・1500発・上乗せタイム (spec.payout)。初当たりの 80% が ST、20% が 時短 100回。ST の 継続率 約 75% (出玉は 1/399 の ほうが 多め)
     //   ST は 転落型: 1 回転ごとに「大当たり (st.hitRate)」と「転落 (st.fallRate)」を 抽選。継続率 = hit / (hit + fall)。
     //     どちらかが 出た 回転は おにおにの バトル (相手で 撃破率が かわる。show.battle)。大当たりなら 撃破、転落なら おにおにが たおされて 通常時へ
     // ----- 設定 1〜6 (2026-11-04 ユーザー指定: 前作と おなじく 設定を つける) -----
@@ -159,17 +159,28 @@ const CONFIG = {
         },
         s399: {
             label: '1/399', name: 'ミドルスペック',
-            note: 'いつも 10R (約1500個)。初当たりの 80% が ST・のこりは 時短100回。ST 継続率 約75%',
+            note: '初当たりは 3000発。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。初当たりの 80% が ST・のこりは 時短100回。ST 継続率 約75%',
             hitRate: 1 / 399.6,
             rounds: 10,
+            // 出玉の 振り分け (2026-11-04 ユーザー指定)。1R = 10C x 15 = 150発 なので 3000発 = 20R・1500発 = 10R
+            //   first: 初当たり (通常時の 当たり) は いつも 3000発
+            //   rash: RASH・時短の 当たり。3000発 25% / 1500発 25% / 1500発 + 上乗せタイム 50%
+            //   (時短の 当たりも ここ。「最初は 3000発」は 通常時の 当たりだけ と した。Claude が きめた)
+            payout: {
+                first: 20,
+                rash: [{ id: 'full', weight: 25, rounds: 20 }, { id: 'base', weight: 25, rounds: 10 }, { id: 'uwanose', weight: 50, rounds: 10, uwanose: true }]
+            },
+            // 上乗せタイム: ラウンド中 (rounds の どれかの ラウンドの はじめ) に 発生。window 秒 以内に 違和感が 起きたら 成功で addRounds (1500発) 上乗せ。
+            //   success: 成功する 割合 / iwakan: 違和感が 起きる 秒 [はやい, おそい] / reveal: 違和感から 上乗せを 知らせる までの 秒
+            uwanose: { success: 0.5, addRounds: 10, window: 10, rounds: [2, 5], iwakan: [2, 8.5], reveal: 1.2 },
             firstHit: [{ weight: 80, next: 'st' }, { weight: 20, next: 'jitan' }],
             jitanSpins: 100,
             st: { hitRate: 1 / 70, fallRate: 1 / 210 },
             hashira: { hitRate: 1 / 72.6, spins: 100 },   // 1 − (1 − 1/72.6)^100 ≒ 75%
             target: { st: 0.8, continuation: 0.75 },
-            // 設定 1〜6 の 釘 (1000円で 約 13 〜 21 回転)
-            settings: [{ hesoWidth: 7.7, heso: 0.052 }, { hesoWidth: 7.95, heso: 0.059 }, { hesoWidth: 8.8, heso: 0.066 },
-                { hesoWidth: 9.3, heso: 0.073 }, { hesoWidth: 9.9, heso: 0.08 }, { hesoWidth: 10.5, heso: 0.087 }]
+            // 設定 1〜6 の 釘 (1000円で 約 8 〜 13.5 回転。3000発・上乗せで 出玉が 多い ぶん、しめて ある)
+            settings: [{ hesoWidth: 6.1, heso: 0.032 }, { hesoWidth: 6.25, heso: 0.037 }, { hesoWidth: 6.6, heso: 0.041 },
+                { hesoWidth: 7.2, heso: 0.045 }, { hesoWidth: 7.3, heso: 0.05 }, { hesoWidth: 7.6, heso: 0.054 }]
         }
     },
 
