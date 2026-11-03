@@ -74,7 +74,9 @@ const SHOW = {
         { id: 'hideout', name: '柱の氷の アジト', bg: 'hideout' }
     ],
     hashira: {
-        senbare: [0.35, 0.0015],                          // 先バレ [当たり, はずれ]
+        // 先バレ [当たり, はずれ] (2026-11-04 ユーザー指定で 2 種類): voice = 前作の 音を 低く した もの / roar = おにおにの 先咆哮 (こっちが アツい)。
+        // どちらも 台の ボタンが 赤く 光る
+        senbare: { voice: [0.22, 0.0012], roar: [0.13, 0.0003] },
         ippatsu: 0.25, quickHit: 0.1,                    // 当たりの うち 一発告知 / ふつうに そろう (のこりは バトル)
         missBattle: 0.1,                                 // はずれの バトルの 割合
         ally: { hit: { rival: 40, onioni: 35, koori: 25 }, miss: { rival: 84, onioni: 12, koori: 4 } },
@@ -83,7 +85,11 @@ const SHOW = {
     },
     storyEvery: 40,        // だいたい 何回転で 場面が すすむ か (はずれの とき)
     // 変動の 時間 (秒)
-    time: { plain: 5.2, plainShort: 2.4, normalReach: 11, tanken: 18, hashira: 26, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
+    // plain: はずれの 変動 (リーチなし) を、のこりの 保留 (0〜3) ごとに。保留が たまるほど 速い (設定が 高くて よく 入る 台でも 回る ように)
+    // missReachByHolds: はずれの リーチの 出やすさを、のこりの 保留ごとに 何倍に するか (保留が たまると リーチが へる)
+    plainByHolds: [5.2, 4, 2.4, 1.4],
+    missReachByHolds: [1, 1, 0.6, 0.35],
+    time: { normalReach: 11, tanken: 18, hashira: 26, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
 };
 
 const Show = (() => {
@@ -98,8 +104,10 @@ const Show = (() => {
     // ----- 保留 -----
     function hold(config, m, fig, result, rng) {
         if (m.mode === 'hst') {
-            const sb = SHOW.hashira.senbare;
-            return { holdColor: 'white', shownColor: 'white', senbare: rng() < (isHit(result) ? sb[0] : sb[1]) };
+            const i = isHit(result) ? 0 : 1, r = rng();
+            const { voice, roar } = SHOW.hashira.senbare;
+            const senbare = r < roar[i] ? 'roar' : r < roar[i] + voice[i] ? 'voice' : null;
+            return { holdColor: 'white', shownColor: 'white', senbare };
         }
         if (m.mode === 'st' || fig === 2) return { holdColor: 'white', shownColor: 'white' };
         // 保留の 色: 当たりかで 出やすさが ちがう
@@ -157,7 +165,8 @@ const Show = (() => {
             const r = rng();
             let acc = 0;
             // 保留の 色が 熱いほど リーチに なりやすい (見た目を 合わせる)
-            const boost = { white: 1, blue: 3, green: 5, red: 8, gold: 10, rainbow: 10 }[result.holdColor] || 1;
+            const boost = ({ white: 1, blue: 3, green: 5, red: 8, gold: 10, rainbow: 10 }[result.holdColor] || 1)
+                * SHOW.missReachByHolds[Math.min(3, ctx.holdsLeft || 0)];
             for (const [k, v] of Object.entries(SHOW.reaches)) {
                 acc += v.miss * boost;
                 if (r < acc) { reach = k; break; }
@@ -190,7 +199,7 @@ const Show = (() => {
         }
         // 当たりの ときの 告知: 役物が 落ちる (yaku) か、決め手の あとに 当たり
         const T = SHOW.time;
-        p.duration = !reach ? (ctx.holdsLeft >= 3 ? T.plainShort : T.plain)
+        p.duration = !reach ? SHOW.plainByHolds[Math.min(3, ctx.holdsLeft || 0)]
             : reach === 'normal' ? T.normalReach
             : reach === 'tanken' ? T.tanken
             : reach === 'zenkaiten' ? T.zenkaiten

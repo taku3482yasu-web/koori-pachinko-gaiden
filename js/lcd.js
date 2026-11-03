@@ -376,6 +376,60 @@ const Lcd = (() => {
     function banner(textStr, sub, color, dur = 2) {
         st.banner = { text: textStr, sub, color, start: st.now, until: st.now + dur };
     }
+    // 設定示唆の トロフィー (液晶の 左下。CONFIG.settingHint)
+    function trophy(level) { st.trophy = { level, start: st.now }; }
+    function drawTrophy(now) {
+        const t = st.trophy;
+        if (!t) return;
+        const el = now - t.start, len = CONFIG.settingHint.show;
+        if (el > len) { st.trophy = null; return; }
+        const c = CONFIG.settingHint.colors[t.level];
+        const x = 10, y = H - 34 - (1 - ease(el / 0.4)) * 40;
+        const hue = (now * 240) % 360;
+        const main = c.rainbow ? `hsl(${hue},90%,60%)` : c.main;
+        const light = c.rainbow ? `hsl(${(hue + 60) % 360},90%,80%)` : c.light;
+        const dark = c.rainbow ? `hsl(${(hue + 180) % 360},80%,40%)` : c.dark;
+        ctx.globalAlpha = Math.min(1, (len - el) / 0.5);
+        ctx.fillStyle = main;
+        ctx.fillRect(x + 2, y, 14, 9);              // さかずき
+        ctx.fillRect(x - 1, y + 1, 3, 5);           // とって
+        ctx.fillRect(x + 16, y + 1, 3, 5);
+        ctx.fillStyle = light;
+        ctx.fillRect(x + 4, y + 1, 3, 6);
+        ctx.fillStyle = dark;
+        ctx.fillRect(x + 7, y + 9, 4, 5);           // 柱
+        ctx.fillRect(x + 3, y + 14, 12, 4);         // 台
+        if (t.level >= 5) {
+            ctx.fillStyle = '#ffffff';
+            const k = Math.floor(now * 8) % 4;
+            ctx.fillRect(x + 18 + k, y - 3, 2, 2);
+            ctx.fillRect(x - 3, y + 10 - k, 2, 2);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // 先バレ: 赤い わくが 光る。先咆哮は おにおにの 顔が せまって「咆哮」
+    function drawSenbare(now) {
+        const s = st.senbare;
+        if (!s) return;
+        const t = now - s.start, len = s.kind === 'roar' ? 2.2 : 1.2;
+        if (t > len) { st.senbare = null; return; }
+        const a = (1 - t / len) * (0.6 + 0.4 * Math.sin(now * 30));
+        ctx.strokeStyle = `rgba(255,30,50,${a})`;
+        ctx.lineWidth = 6;
+        ctx.strokeRect(3, 3, W - 6, H - 6);
+        if (s.kind !== 'roar') return;
+        const k = clamp01(t / 0.25), out = clamp01((t - len + 0.4) / 0.4);
+        ctx.fillStyle = `rgba(60,0,0,${0.55 * (1 - out)})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1 - out;
+        const jx = (Math.random() - 0.5) * 4 * (1 - k * 0.5);
+        Art.draw(ctx, 'onioni', W / 2 - 40 + jx, H - 6, { height: 70 + 50 * ease(k), frame: Math.floor(now * 12) % 2 });
+        text('咆哮', W / 2 + 62 + jx, H / 2 - 4, 30 * (1.6 - 0.6 * ease(k)), Math.floor(now * 12) % 2 ? '#ff2a3a' : '#ffd84a', 'center', { bold: true });
+        text('ガアアアッ！！', W / 2 + 62, H / 2 + 26, 11, '#ffffff');
+        ctx.globalAlpha = 1;
+    }
+
     function drawBanner(now) {
         const b = st.banner;
         if (!b || now > b.until) return;
@@ -421,9 +475,10 @@ const Lcd = (() => {
         } else if (e.type === 'chainEnd') {
             if (e.chain >= 2) st.chainEnd = { start: st.now, chain: e.chain, balls: e.balls };
         } else if (e.type === 'hold' && e.result.senbare && m.mode === 'hst') {
-            // 先バレ: 入った しゅんかんに 光る
-            st.flash = 0.7;
-            st.senbare = st.now;
+            // 先バレ: 入った しゅんかんに 光る。先咆哮は おにおにが 叫んで 液晶が ゆれる
+            st.flash = e.result.senbare === 'roar' ? 0.4 : 0.7;
+            st.senbare = { start: st.now, kind: e.result.senbare };
+            if (e.result.senbare === 'roar') st.shake = 1.2;
         } else if (e.type === 'holdChange') {
             st.holdFlash[e.index] = st.now;
         }
@@ -456,6 +511,8 @@ const Lcd = (() => {
         drawFallen(now);
         drawChainEnd(now);
         drawStEntry(now);
+        drawSenbare(now);
+        drawTrophy(now);
         drawBanner(now);
         if (st.flash > 0) {
             ctx.fillStyle = `rgba(255,255,255,${Math.min(1, st.flash)})`;
@@ -967,5 +1024,5 @@ const Lcd = (() => {
     // 早送り・テスト用
     function debug() { return st; }
 
-    return { init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
+    return { init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
 })();

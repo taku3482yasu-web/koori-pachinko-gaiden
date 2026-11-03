@@ -326,6 +326,7 @@ const Machine = (() => {
         if (options.gun !== undefined) result.forceGun = options.gun;
         addShow(m, fig, result);
         if (options.holdColor) result.holdColor = result.shownColor = options.holdColor;
+        if (options.senbare) result.senbare = options.senbare;
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });

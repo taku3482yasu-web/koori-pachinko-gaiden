@@ -2,7 +2,7 @@
 // 玉の 流れの しらべ (Node.js)。盤面 (js/config.js の board) に 玉を 打って、どこへ 行くかを 数える
 //   node tools/flow.js              強さ 20〜100 を 10 ずつ、それぞれ 300 発
 //   node tools/flow.js 30 95        強さを えらぶ
-//   --open (電チュー・アタッカーを 開けたまま) / --n 1000
+//   --open (電チュー・アタッカーを 開けたまま) / --n 1000 / --heso 10.5 (ヘソの 命釘の すき間)
 // =====================================================================
 const fs = require('fs');
 const path = require('path');
@@ -27,9 +27,9 @@ function load(seed = 7) {
 }
 
 // strength で n 発 打ち、行き先を 数える
-function flow(strength, n = 300, { open = false, seed = 7 } = {}) {
+function flow(strength, n = 300, { open = false, seed = 7, hesoWidth } = {}) {
     const g = load(seed);
-    const board = g.Board.build(g.CONFIG, {});
+    const board = g.Board.build(g.CONFIG, hesoWidth ? { hesoWidth } : {});
     if (open) { g.Board.setOpen(board, 'denchu', true); g.Board.setOpen(board, 'attacker', true); }
     const world = { board, balls: [], rng: g.rng, events: [] };
     const count = {};
@@ -51,9 +51,11 @@ if (require.main === module) {
     const open = args.includes('--open');
     const ni = args.indexOf('--n');
     const n = ni >= 0 ? Number(args[ni + 1]) : 300;
-    const list = args.filter((a, i) => /^\d+$/.test(a) && args[i - 1] !== '--n').map(Number);
+    const hi = args.indexOf('--heso');
+    const hesoWidth = hi >= 0 ? Number(args[hi + 1]) : undefined;
+    const list = args.filter((a, i) => /^\d+$/.test(a) && args[i - 1] !== '--n' && args[i - 1] !== '--heso').map(Number);
     for (const s of list.length ? list : [20, 30, 40, 50, 60, 70, 80, 90, 100]) {
-        const c = flow(s, n, { open });
+        const c = flow(s, n, { open, hesoWidth });
         const pct = k => ((c[k] || 0) / n * 100).toFixed(1).padStart(5);
         console.log(`強さ ${String(s).padStart(3)}: ヘソ ${pct('heso')}%  ゲート ${pct('gate')}%  電チュー ${pct('denchu')}%  アタッカー ${pct('attacker')}%  一般 ${pct('general1')}/${pct('general2')}%  ワープ ${pct('warp')}%  ファール ${pct('foul')}%  アウト ${pct('out')}%`);
     }

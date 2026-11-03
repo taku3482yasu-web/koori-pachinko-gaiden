@@ -29,7 +29,118 @@ const Sound = (() => {
             seOut = ctx.createGain();
             seOut.gain.value = seLevel;
             seOut.connect(ctx.destination);
+            loadVoice();
         }
+    }
+
+    // 前作の 録音 (js/sound-heso.js の HESO_SOUND) を 読みこむ。data: の URL なので、ファイルを 直接 開いても 読める
+    let voiceBuffer = null;
+    function loadVoice() {
+        if (!ctx || typeof HESO_SOUND === 'undefined') return;
+        const bin = atob(HESO_SOUND.split(',')[1]);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        ctx.decodeAudioData(bytes.buffer).then(buf => { voiceBuffer = buf; }, () => { voiceBuffer = null; });
+    }
+
+    // 先バレ音 (2026-11-04 ユーザー指定: 前作の 先バレ音を 低く した もの)。前作と おなじ 録音の 長い ほう (1.3〜3.5 秒) を
+    // 低く (rate 0.8) して、少し こもらせ、短い こだまを つける。録音が 読めない ときは 低い キュイン
+    const VOICE = { start: 1.3, end: 3.5, gain: 4, rate: 0.8, lowpass: 2400, echo: 0.18, feedback: 0.3 };
+    function senbareVoice() {
+        if (!voiceBuffer) {
+            tone(600, 0, 0.4, { slideTo: 2100, volume: 0.09, type: 'square' });
+            tone(1200, 0.05, 0.35, { slideTo: 3000, volume: 0.04 });
+            return;
+        }
+        const v = VOICE, t0 = ctx.currentTime;
+        const out = ctx.createGain();
+        out.gain.value = v.gain;
+        out.connect(seOut);
+        const muffle = ctx.createBiquadFilter();
+        muffle.type = 'lowpass';
+        muffle.frequency.value = v.lowpass;
+        muffle.connect(out);
+        const delay = ctx.createDelay(1), back = ctx.createGain();
+        delay.delayTime.value = v.echo;
+        back.gain.value = v.feedback;
+        muffle.connect(delay);
+        delay.connect(back).connect(delay);
+        delay.connect(out);
+        const src = ctx.createBufferSource();
+        src.buffer = voiceBuffer;
+        src.playbackRate.value = v.rate;
+        src.connect(muffle);
+        src.start(t0, v.start, v.end - v.start);
+    }
+
+    // 先咆哮 (2026-11-04 ユーザー指定: 動画の エヴァの 先咆哮の ような、おにおにが 叫ぶ 先バレ)。音は 自作:
+    //   ドンッ (低い 一撃) → おにおにの 叫び (のこぎり波の うなりを ゆらし、ひずませ、ざらざらした 息を まぜる。高く なって 低く ぬける)
+    //   → 叫びの あとに 高い 音 (約 4000Hz) が キーンと 残って 消える (動画の 音の 形を まねた)
+    function senbareRoar() {
+        const t0 = ctx.currentTime, len = 1.5;
+        tone(70, 0, 0.5, { slideTo: 32, volume: 0.2, type: 'sine' });
+        tone(140, 0, 0.18, { slideTo: 50, volume: 0.12, type: 'square' });
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.0001, t0);
+        out.gain.exponentialRampToValueAtTime(0.22, t0 + 0.1);
+        out.gain.setValueAtTime(0.22, t0 + len * 0.6);
+        out.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+        out.connect(seOut);
+        // ひずみ
+        const shaper = ctx.createWaveShaper();
+        const curve = new Float32Array(1024);
+        for (let i = 0; i < curve.length; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 4); }
+        shaper.curve = curve;
+        const band = ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.Q.value = 1.2;
+        band.frequency.setValueAtTime(500, t0);
+        band.frequency.exponentialRampToValueAtTime(1500, t0 + 0.35);
+        band.frequency.exponentialRampToValueAtTime(600, t0 + len);
+        shaper.connect(band).connect(out);
+        // うなり (のどの ふるえ = 速い ゆれ)
+        const vib = ctx.createOscillator(), vibDepth = ctx.createGain();
+        vib.frequency.value = 11;
+        vibDepth.gain.value = 14;
+        vib.connect(vibDepth);
+        for (const [f, vol] of [[110, 0.5], [165, 0.35], [113, 0.4]]) {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sawtooth';
+            o.frequency.setValueAtTime(f, t0);
+            o.frequency.exponentialRampToValueAtTime(f * 1.6, t0 + 0.35);
+            o.frequency.exponentialRampToValueAtTime(f * 0.7, t0 + len);
+            vibDepth.connect(o.frequency);
+            g.gain.value = vol;
+            o.connect(g).connect(shaper);
+            o.start(t0);
+            o.stop(t0 + len + 0.05);
+        }
+        vib.start(t0);
+        vib.stop(t0 + len + 0.05);
+        // 息 (ざらざら)
+        const noise = ctx.createBufferSource();
+        const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        noise.buffer = buf;
+        const ng = ctx.createGain();
+        ng.gain.value = 0.35;
+        noise.connect(ng).connect(band);
+        noise.start(t0);
+        // キーン (叫びの あと 残る 高い 音。少し ゆれる)
+        const ring = ctx.createOscillator(), rg = ctx.createGain();
+        ring.type = 'sine';
+        ring.frequency.setValueAtTime(4000, t0 + 0.9);
+        const trem = ctx.createOscillator(), tg = ctx.createGain();
+        trem.frequency.value = 7;
+        tg.gain.value = 18;
+        trem.connect(tg).connect(ring.frequency);
+        rg.gain.setValueAtTime(0.0001, t0 + 0.9);
+        rg.gain.exponentialRampToValueAtTime(0.035, t0 + 1.1);
+        rg.gain.setValueAtTime(0.035, t0 + 2.4);
+        rg.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.6);
+        ring.connect(rg).connect(seOut);
+        [ring, trem].forEach(o => { o.start(t0 + 0.9); o.stop(t0 + 3.7); });
     }
 
     // 1つの音: 周波数 freq (Hz)、start 秒後から length 秒。slideTo で音の高さを変える
@@ -83,6 +194,7 @@ const Sound = (() => {
 
     const SOUNDS = {
         buzz: () => buzz(1.3),
+        buzzShort: () => buzz(0.7),
         stop: () => tone(660, 0, 0.06, { volume: 0.05 }),
         hold: () => tone(1046, 0, 0.05, { volume: 0.04, type: 'triangle' }),
         // 台のボタンの高い音 (先読み)
@@ -135,8 +247,9 @@ const Sound = (() => {
         gun: () => { for (let i = 0; i < 12; i++) tone(200 + i * 60, i * 0.08, 0.12, { volume: 0.04, type: 'sawtooth' }); },
         stIn: () => { tone(60, 0, 1.0, { volume: 0.15, type: 'sawtooth', slideTo: 120 }); [587, 698, 880, 1175].forEach((f, i) => tone(f, 0.3 + i * 0.12, 0.3, { volume: 0.07, type: 'square' })); },
         count: () => tone(1760, 0, 0.04, { volume: 0.03 }),
-        // 先バレ (キュイン) と 一発告知 (ズキューン)
-        senbare: () => { tone(1200, 0, 0.35, { slideTo: 4200, volume: 0.08, type: 'square' }); tone(2400, 0.05, 0.3, { slideTo: 6000, volume: 0.04 }); },
+        // 先バレ (前作の 音を 低く した もの / おにおにの 先咆哮) と 一発告知 (ズキューン)
+        senbareVoice,
+        senbareRoar,
         ippatsu: () => { tone(4000, 0, 0.5, { slideTo: 600, volume: 0.09, type: 'sawtooth' }); tone(80, 0, 0.6, { volume: 0.15, type: 'square', slideTo: 40 }); [1568, 2093, 2637].forEach((f, i) => tone(f, 0.45 + i * 0.08, 0.4, { volume: 0.07 })); },
         payout: () => tone(2637, 0, 0.03, { volume: 0.015, type: 'triangle' })
     };
