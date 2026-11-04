@@ -415,7 +415,7 @@
 
     // 液晶の ズーム (可動液晶: バトル・大きい リーチ・大当たりの はじめに 前へ せり出す)
     function zoomTarget(m) {
-        if (Lcd.storyActive() || (m.bonus && (m.bonus.phase === 'opening' || m.bonus.phase === 'promo'))) return 1;
+        if (Lcd.storyActive() || (m.bonus && (m.bonus.phase === 'opening' || (m.bonus.promo && m.bonus.promo.state === 'run')))) return 1;
         const sp = m.spin;
         if (!sp) return 0;
         const p = sp.plan;

@@ -903,10 +903,10 @@ const Lcd = (() => {
         text('おめでとう！', W / 2, 116, 24 * (0.6 + 0.4 * ease(e * 2)), 'rainbow', 'center', { bold: true });
     }
 
-    // 昇格チャレンジ (2026-11-04 ユーザー指定): おにおに vs こおりくんの 影。左の ゲージ (青 < 緑 < 紫 < 赤 < 虹) を ボタン長押しで ためる (押さなくても 結果は おなじ)。
+    // 昇格チャレンジ (2026-11-04 ユーザー指定): ラウンド中に おこなう。おにおに vs こおりくんの 影。左の ゲージ (青 < 緑 < 紫 < 赤 < 虹) を ボタン長押しで ためる (押さなくても 結果は おなじ)。
     //   色が きまったら 激突して ボタンか レバー (レバーは 確定)。成功なら ゲージが 虹色に フラッシュして 撃破 → RASH
     function drawPromo(m, now) {
-        const P = SHOW.promo, T = P.time, b = m.bonus, pr = b.promo, t = m.config.machine.bonus.promo - b.timer;
+        const P = SHOW.promo, T = P.time, b = m.bonus, pr = b.promo, t = m.config.machine.bonus.promo - pr.timer;
         const final = P.gauge.indexOf(pr.color) + 1;
         const dt = st.promoLast ? Math.max(0, now - st.promoLast) : 0;
         st.promoLast = now;
@@ -942,6 +942,8 @@ const Lcd = (() => {
             ctx.fillRect(gx, gy + gh - i * seg - seg * fill, 16, seg * fill - 1);
         }
         if (won) { ctx.strokeStyle = rainbow(now); ctx.lineWidth = 3; ctx.strokeRect(gx - 3, gy - 3, 22, gh + 6); }
+        // ラウンド中なので 右打ちの ままで
+        text('右打ち →', W - 6, H - 8, 9, Math.floor(now * 3) % 2 ? '#ff6a8a' : '#ffffff', 'right');
         if (t < T.intro) {
             ctx.fillStyle = `rgba(0,0,0,${0.6 * ease(t * 3)})`;
             ctx.fillRect(0, 26, W, 46);
@@ -1362,7 +1364,7 @@ const Lcd = (() => {
 
     // ----- 大当たり -----
     function drawBonus(m, now) {
-        if (m.bonus && m.bonus.phase === 'promo') return drawPromo(m, now);
+        if (m.bonus && m.bonus.promo && m.bonus.promo.state === 'run') return drawPromo(m, now);
         const b = st.bonus || { rounds: m.bonus.rounds, round: m.bonus.round, count: m.bonus.count, next: m.bonus.next, from: m.bonus.from, chain: m.chain, start: now, charge: m.bonus.charge };
         background('bonus', now);
         const el = now - b.start;
