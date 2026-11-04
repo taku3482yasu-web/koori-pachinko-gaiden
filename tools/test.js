@@ -435,12 +435,15 @@ for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
         add(h, 'n');
         if (result.senbare) { add(h, 'senbare'); add(h, 'sb_' + result.senbare); }
         add(h, p.sub);
-        if (p.sub === 'battle') { add(h, p.attack); if (p.shuketsu) add(h, 'shuketsu'); if (p.ally !== 'rival') add(h, 'allyChance'); }
+        if (p.sub === 'battle') { add(h, p.attack); add(h, 'k:' + p.hKind); if (p.shuketsu) add(h, 'shuketsu'); if (p.rival !== 'rival') add(h, 'allyChance'); }
     }
     const trust = k => { const a = (c.hit[k] || 0), b = (c.miss[k] || 0); return a / (a + b); };
     check(trust('senbare') > 0.75, `先バレの 信頼度 ${pct(trust('senbare'))}`);
     check(trust('sb_roar') > trust('sb_voice') && trust('sb_voice') > 0.7, `先咆哮 ${pct(trust('sb_roar'))} は 先バレ音 ${pct(trust('sb_voice'))} より アツい`);
-    check(trust('ippatsu') === 1, '一発告知は かならず 当たり');
+    check(trust('flash') === 1, '虹色の フラッシュは かならず 当たり');
+    check(trust('k:ippatsu') === 1 && trust('k:rainbow') === 1, 'バトルの 一発告知・虹色の 決め手は かならず 当たり');
+    check(trust('k:plain') < 0.05 && (c.hit['k:plain'] || 0) > 0, `一発告知も 虹色も ない バトルは ほぼ はずれ (${pct(trust('k:plain'))})`);
+    check((c.hit.flash || 0) > (c.hit.battle || 0), `当たりは 勝負なしが 多い (勝負なし ${c.hit.flash}・バトル ${c.hit.battle})`);
     check(trust('ichigeki') > trust('rengeki'), `一撃 ${pct(trust('ichigeki'))} は 連撃 ${pct(trust('rengeki'))} より 期待度が 高い`);
     check(trust('shuketsu') > 0.6, `柱の氷 集結 ${pct(trust('shuketsu'))} は 大チャンス`);
     check(trust('allyChance') > trust('battle'), `おにおに・こおりくん 参戦 ${pct(trust('allyChance'))} は チャンス (バトル全体 ${pct(trust('battle'))})`);

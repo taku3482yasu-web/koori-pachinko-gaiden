@@ -25,9 +25,11 @@
 //   相手は 結果から えらぶ: 当たりなら weight × 撃破率、転落なら weight × (1 − 撃破率)。
 //   こう すると「その 相手が 出たときの 撃破率」が ちょうど kill に なる (weight は スペックの 継続率に 合わせて ある)
 // 時短: はやい 変動。当たりは「こおりくんの 声が きこえた！」リーチから
-// 柱の氷RASH (2026-11-04 ユーザー指定): 一発告知と 先バレが 主役。ときどき バトル。
-//   先バレ: 電チューに 玉が 入った しゅんかんに 光って 鳴る (当たりの 35%)。一発告知: 変動の はじめに いきなり 当たり (当たりの 25%)
-//   バトル: 味方 (ライバル探検隊 / おにおに / こおりくん。おにおに・こおりくんは チャンス) vs 柱の氷 (3人 集結は 大チャンス)。
+// 柱の氷RASH (2026-11-04 ユーザー指定): 柱の氷が 主役。ライバルチーム・こおりくん・おにおにと たたかい、柱の氷が 勝てば 当たり。
+//   基本は 勝負なし: ボタンが 虹色・ぶるぶる・レバブル・先バレ などで 柱の氷が 虹色に フラッシュして 図柄が そろう (sub 'flash')。
+//   バトルの 当たりは 一発告知 か、一撃・連撃の レバー・ボタンが 虹色。それらが ないと ほぼ 当たらない (ごくまれに 当たる)
+//   先バレ: 電チューに 玉が 入った しゅんかんに 光って 鳴る (当たりの 35%)
+//   バトル: 柱の氷 (3人 集結は 大チャンス) vs 相手 (ライバルチーム / おにおに / こおりくん。おにおに・こおりくんは チャンス)。
 //     わざは 一撃 (金棒レバーを 引く) か 連撃 (ボタンを 連打)。一撃の ほうが 期待度が 高い
 // =====================================================================
 
@@ -208,10 +210,12 @@ const SHOW = {
         // 先バレ [当たり, はずれ] (2026-11-04 ユーザー指定で 2 種類): voice = 前作の 音を 低く した もの / roar = おにおにの 先咆哮 (こっちが アツい)。
         // どちらも 台の ボタンが 赤く 光る
         senbare: { voice: [0.22, 0.0012], roar: [0.13, 0.0003] },
-        ippatsu: 0.25, quickHit: 0.1,                    // 当たりの うち 一発告知 / ふつうに そろう (のこりは バトル)
+        flash: 0.65,                                     // 当たりの うち 勝負なしで そろう (のこりは バトル)
+        notices: { rainbow: 40, buru: 30, lever: 30 },   // 勝負なしの 知らせ (先バレが あれば 先バレ): ボタンが 虹色 / ぶるぶる / レバブル
+        battleHit: { ippatsu: 50, rainbow: 40, plain: 10 },   // バトルの 当たり: 一発告知 / 虹色の レバー・ボタン / なにも なし
         missBattle: 0.1,                                 // はずれの バトルの 割合
-        ally: { hit: { rival: 40, onioni: 35, koori: 25 }, miss: { rival: 84, onioni: 12, koori: 4 } },
-        shuketsu: [0.4, 0.012],                          // 柱の氷 集結 [当たり, はずれ]
+        rival: { hit: { rival: 40, onioni: 35, koori: 25 }, miss: { rival: 84, onioni: 12, koori: 4 } },
+        shuketsu: [0.4, 0.008],                          // 柱の氷 集結 [当たり, はずれ]
         ichigeki: [0.62, 0.2]                            // 一撃 (のこりは 連撃) [当たり, はずれ]
     },
     storyEvery: 40,        // だいたい 何回転で 場面が すすむ か (はずれの とき)
@@ -224,7 +228,7 @@ const SHOW = {
     // crack: 1・3・5 の あとの 流れ (秒)。ひび → 究極形態が 出る → 画面を 粉砕 → 咆哮 → おめでとう！
     crack: { crack: 1.5, emerge: 3.7, smash: 4.7, roar: 6.9, end: 9.5 },
     time: { sango: 14, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
-        normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stJoin: 3.2, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
+        normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stJoin: 3.2, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hFlash: 4.6, hBattle: 11 }
 };
 
 const Show = (() => {
@@ -554,18 +558,21 @@ const Show = (() => {
         const H = SHOW.hashira, T = SHOW.time;
         const hit = isHit(result);
         const base = { kind: 'hashira', hit, senbare: Boolean(result.senbare), figures: figures(result, false, rng), last: m.stLeft <= 0 };
-        if (hit) {
-            const r = rng();
-            if (result.forceBattle) { /* バトルに する */ }
-            else if (r < H.ippatsu) return { ...base, sub: 'ippatsu', duration: T.hIppatsu };
-            else if (r < H.ippatsu + H.quickHit) return { ...base, sub: 'quick', duration: T.hQuick + 0.6 };
-        } else if (!result.forceBattle && rng() >= H.missBattle) return { ...base, sub: 'quick', duration: T.hQuick };
-        const ally = result.forceAlly || pick(hit ? H.ally.hit : H.ally.miss, rng);
+        // 基本は 勝負なし
+        if (hit && !result.forceBattle && (result.forceNotice || rng() < H.flash)) {
+            const notice = result.forceNotice || (result.senbare ? 'senbare' : pick(H.notices, rng));
+            return { ...base, sub: 'flash', notice, noticeAt: 0.5, duration: T.hFlash };
+        }
+        if (!hit && !result.forceBattle && rng() >= H.missBattle) return { ...base, sub: 'quick', duration: T.hQuick };
+        const rival = result.forceAlly || pick(hit ? H.rival.hit : H.rival.miss, rng);
         const shuketsu = result.forceShuketsu !== undefined ? result.forceShuketsu : rng() < H.shuketsu[hit ? 0 : 1];
         const enemies = shuketsu ? ['haru', 'okadishi', 'kanezu'] : [['haru', 'okadishi', 'kanezu'][Math.floor(rng() * 3)]];
         const ichigeki = result.forceAttack ? result.forceAttack === 'ichigeki' : rng() < H.ichigeki[hit ? 0 : 1];
         const textColor = result.forceText || pickText(SHOW.battleText[hit ? 'hit' : 'hst'], rng);
-        return { ...base, sub: 'battle', textColor, ally, enemies, shuketsu, attack: ichigeki ? 'ichigeki' : 'rengeki', action: ichigeki ? 'lever' : 'mash', duration: T.hBattle + (shuketsu ? 1.5 : 0) };
+        const hKind = hit ? result.forceHKind || pick(H.battleHit, rng) : 'plain';
+        const extra = shuketsu ? 1.5 : 0;
+        const ippatsuAt = hKind === 'ippatsu' ? 3.4 + extra : null;
+        return { ...base, sub: 'battle', textColor, rival, enemies, shuketsu, hKind, rainbow: hKind === 'rainbow', ippatsuAt, attack: ichigeki ? 'ichigeki' : 'rengeki', action: ichigeki ? 'lever' : 'mash', duration: ippatsuAt ? ippatsuAt + 3.6 : T.hBattle + extra };
     }
 
     // 時短: はやい 変動。当たりは リーチ

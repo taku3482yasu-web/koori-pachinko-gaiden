@@ -30,7 +30,7 @@
         lastAim: 'left', zoom: 0, paused: true,
         stats: { launched: 0, launchedLeft: 0, heso: 0, paid: 0 },
         record: store.get('record', { plays: 0, firstHits: 0, bestChain: 0, bestBalls: 0 }),
-        chainStartBalls: 0, history: [], nextSave: 5, pushAt: null
+        chainStartBalls: 0, history: [], nextSave: 5, pushAt: null, promptWait: 0
     };
     if (params.has('strength')) game.strength = Number(params.get('strength'));
     Lcd.init();
@@ -68,6 +68,7 @@
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
             pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
             stAlly: params.get('stAlly') || undefined, self: params.get('self') || undefined, foe: params.get('foe') || undefined, revive: params.get('revive') === '1',
+            hKind: params.get('hKind') || undefined, notice: params.get('notice') || undefined,
             mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
             gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', promo: params.has('promo') ? params.get('promo') === '1' : undefined, step: params.get('step') || undefined
         };
@@ -115,6 +116,15 @@
         if (time >= game.nextSave) { game.nextSave = time + 5; saveGame(); }
         if (game.pushAt !== null && time - game.pushAt > 0.7) skipSpin(m);
         Lcd.setHolding(game.pushAt !== null);
+        // 「ボタンを押せ」などは 押すまで 少し 演出を 止めて 待つ
+        if (Lcd.promptWaiting()) {
+            if (game.promptWait < CONFIG.show.promptWait) {
+                game.promptWait += dt;
+                if (m.spin) m.spin.elapsed -= dt;
+                else if (m.bonus && m.bonus.promo && m.bonus.promo.state === 'run') m.bonus.promo.timer += dt;
+                cues.forEach(c => { c.t += dt; });
+            }
+        } else game.promptWait = 0;
         const aim = Machine.aim(m);
         if (game.auto) game.strength = CONFIG.launch.presets[aim];
         if ((game.fireOn || game.holding || game.auto) && time >= game.nextShot && game.balls > 0 && game.world.balls.length < CONFIG.ball.maxBalls) {
@@ -288,15 +298,22 @@
             }
         } else if (plan.kind === 'jitan' && plan.reach) at(1.1, 'reach');
         else if (plan.kind === 'hashira') {
-            if (plan.sub === 'ippatsu') at(0.3, 'ippatsu');
-            else if (plan.sub === 'quick' && plan.hit) at(D - 0.2, 'win');
-            else if (plan.sub === 'battle') {
+            if (plan.sub === 'flash') {
+                // 勝負なし: 知らせ → 虹色の フラッシュ → 図柄ぞろい
+                at(plan.noticeAt, { rainbow: 'noticeRainbow', buru: 'vibratePush', lever: 'vibrateLever', senbare: 'noticeRainbow' }[plan.notice]);
+                at(plan.noticeAt + 0.9, 'ippatsu');
+                at(D - 1.4, 'win');
+            } else if (plan.sub === 'battle') {
                 const x = plan.shuketsu ? 1.5 : 0;
                 at(0.8, 'cutin');
                 if (plan.shuketsu) { [0.8, 1.3, 1.8].forEach(t => at(t, 'clash')); at(2.2, 'vibratePush'); }
-                if (plan.ally !== 'rival' || plan.shuketsu) at(2.0, 'chance');
-                at(2.8 + x + 1.4, plan.attack === 'ichigeki' ? 'smash' : 'chance');
-                at(D - 3.0, plan.hit ? 'gekiha' : 'lose');
+                if (plan.rival !== 'rival' || plan.shuketsu) at(2.0, 'chance');
+                if (plan.ippatsuAt) at(plan.ippatsuAt, 'ippatsu');
+                else {
+                    at(2.8 + x + 1.4, plan.attack === 'ichigeki' ? 'smash' : 'chance');
+                    if (plan.rainbow) at(D - 5.4, 'noticeRainbow');
+                    at(D - 3.0, plan.hit ? 'gekiha' : 'lose');
+                }
             }
         }
     }
@@ -305,6 +322,7 @@
             const name = cues.shift().name;
             if (name === 'vibratePush') vibrate('push');
             else if (name === 'vibrateLever') vibrate('lever');
+            else if (name === 'noticeRainbow') { flashClass($('push'), 'rainbow', 1800); Sound.play('chance'); }
             else Sound.play(name);
         }
     }
@@ -397,6 +415,8 @@
         const p = Lcd.prompt();
         $('push').classList.toggle('glow', p === 'push');
         $('lever').classList.toggle('glow', p === 'lever');
+        $('push').classList.toggle('rainbow-on', p === 'push' && Lcd.promptRainbow());
+        $('lever').classList.toggle('rainbow-on', p === 'lever' && Lcd.promptRainbow());
         // 「金棒レバーを 引け！」が 出た しゅんかんに レバーが 震える (レバブル)
         if (p !== lastPrompt) {
             if (p === 'lever') vibrate('lever');
@@ -623,7 +643,11 @@
         $('debug-st').addEventListener('click', () => Machine.debugMode(game.machine, 'st'));
         $('debug-jitan').addEventListener('click', () => Machine.debugMode(game.machine, 'jitan'));
         $('debug-hst').addEventListener('click', () => Machine.debugMode(game.machine, 'hst'));
-        $('debug-hbattle').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { battle: true, shuketsu: true, ally: 'onioni' }));
+        const inHst = () => { if (game.machine.mode !== 'hst') Machine.debugMode(game.machine, 'hst'); };
+        $('debug-hbattle').addEventListener('click', () => { inHst(); Machine.debugHold(game.machine, 'hit', { hKind: 'rainbow', shuketsu: true, ally: 'onioni' }); });
+        $('debug-h-flash').addEventListener('click', () => { inHst(); Machine.debugHold(game.machine, 'hit', { notice: 'rainbow' }); });
+        $('debug-h-ippatsu').addEventListener('click', () => { inHst(); Machine.debugHold(game.machine, 'hit', { hKind: 'ippatsu' }); });
+        $('debug-h-plain').addEventListener('click', () => { inHst(); Machine.debugHold(game.machine, 'miss', { battle: true }); });
         $('debug-auto').addEventListener('click', () => { game.auto = !game.auto; });
         ['pillars', 'doors', 'kanabo'].forEach(k => $('debug-gim-' + k).addEventListener('click', () => Lcd.startGimmick(k, 3, true)));
     }

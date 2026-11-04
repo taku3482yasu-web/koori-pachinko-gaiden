@@ -451,6 +451,8 @@ const Machine = (() => {
         if (options.reach) result.forceReach = options.reach;
         if (options.battle) result.forceBattle = true;
         if (options.ally) result.forceAlly = options.ally;
+        if (options.hKind) { result.forceHKind = options.hKind; result.forceBattle = true; }
+        if (options.notice) result.forceNotice = options.notice;
         if (options.shuketsu !== undefined) result.forceShuketsu = options.shuketsu;
         if (options.attack) result.forceAttack = options.attack;
         if (options.gun !== undefined) result.forceGun = options.gun;
