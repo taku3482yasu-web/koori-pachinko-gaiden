@@ -11,6 +11,8 @@ const Customize = (() => {
             choices: { none: 'なし', chance: 'チャンス', recommend: 'おすすめ', hot: '熱' }, default: 'recommend' },
         notice: { label: '告知', group: '演出', note: '先告知: 当たりの 変動の はじめに ボタンが 虹色に 光る。後告知: 演出なしで 図柄が ばらばらに 止まって から 当たりを 知らせる。一発告知: 変動の はじめに すぐ 当たり',
             choices: { normal: 'ふつう', pre: '先告知', post: '後告知', oneshot: '一発告知' }, default: 'normal' },
+        rashMode: { label: 'RASH のモード', group: '演出', note: 'おにおにモード: スタンダード。こおりくんモード: 先読み (先バレ・仲間の 合流) の 期待度が 上がる。柱の氷モード (1/399 のみ): 3000発 以上の 当たりの 前に 柱の氷が 集結して 告知する',
+            choices: { onioni: 'おにおに', koori: 'こおりくん', hashira: '柱の氷' }, default: 'onioni' },
         line: { label: 'ふるカワ', group: '演出', note: '',
             choices: { often: 'よくしゃべる', normal: 'ふつう', off: 'しゃべらない' }, default: 'normal' },
         leverBuru: { label: 'レバブル', group: '演出', note: 'リーチの ときに 金棒レバーが ぶるぶる 震える ことが ある',

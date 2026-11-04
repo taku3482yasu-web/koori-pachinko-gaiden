@@ -1402,6 +1402,7 @@ const Lcd = (() => {
     // おにおにの バトル (2026-11-04 ユーザー指定)。流れは show.js の stPlan。plan.t が それぞれの はじまる 秒
     function drawBattle(m, plan, el, D, now) {
         const t = plan.t, e = SHOW.enemies[plan.enemy], B = SHOW.stBattle, walk = Math.floor(now * 6);
+        if (t.notice !== undefined && el >= t.notice && el < t.notice + SHOW.rashMode.noticeTime) return drawShuketsu(el - t.notice, now);
         const dashing = el < t.enemy, lost = plan.revive !== 'none';
         if (el >= t.result) closeAction();
         background(dashing ? 'templeRun' : 'templeFight', now);
@@ -1693,7 +1694,26 @@ const Lcd = (() => {
             Art.draw(ctx, id, x, y, { height: rainbowOn ? 62 : 48, frame: Math.floor(now * (rainbowOn ? 16 : 3)) + i });
         });
     }
+    // 柱の氷モードの 集結告知 (1/399。3000発 以上の 当たりの 前)
+    function drawShuketsu(k, now) {
+        const len = SHOW.rashMode.noticeTime;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, W, H);
+        const c = ease(k * 3);
+        ['haru', 'okadishi', 'kanezu'].forEach((id, i) => {
+            const x = i * W / 3;
+            ctx.fillStyle = ['#0e4a34', '#123a7a', '#3a4a6a'][i];
+            ctx.fillRect(x + 1, 0, W / 3 - 2, H);
+            Art.draw(ctx, id, x + W / 6, H - 16 + (1 - c) * (i % 2 ? -130 : 130), { height: 84, frame: Math.floor(now * 8) + i });
+        });
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 8, W, 42);
+        text('柱の氷 集結！！', W / 2, 20, 16, '#ffd84a', 'center', { bold: true });
+        if (k > 1) text('3000発 以上 確定！', W / 2, 40, 15 * (0.7 + 0.3 * ease((k - 1) * 3)), 'rainbow', 'center', { bold: true });
+        if (k > len - 0.3) { ctx.fillStyle = `rgba(255,255,255,${(k - len + 0.3) / 0.3})`; ctx.fillRect(0, 0, W, H); }
+    }
     function drawHashira(m, plan, el, D, now) {
+        if (plan.shuketsuNotice && el >= 0.3 && el < 0.3 + SHOW.rashMode.noticeTime) return drawShuketsu(el - 0.3, now);
         background('hashiraRash', now);
         header(m, now);
         if (plan.sub === 'quick') {

@@ -83,7 +83,9 @@
     // カスタマイズを 台・液晶・音に わたす
     function syncCustomize() {
         const c = Customize.get;
-        if (game.machine) game.machine.fx = { senyomi: c('senyomi'), notice: c('notice'), line: c('line') };
+        // 柱の氷モードは 1/399 だけ (ほかの 台では おにおにモード)
+        const rashMode = params.get('rashMode') || c('rashMode');
+        if (game.machine) game.machine.fx = { senyomi: c('senyomi'), notice: c('notice'), line: c('line'), rashMode: rashMode === 'hashira' && !game.machine.spec.payout ? 'onioni' : rashMode };
         Lcd.setOptions({ yaku: c('yaku'), leverTap: c('leverTap') === 'on' });
         Sound.setVolume(Customize.volume('seVolume'));
         if (typeof Bgm !== 'undefined') Bgm.setVolume(Customize.volume('bgmVolume'));
@@ -214,6 +216,7 @@
 
     // 変動が はじまった ときの 記録・先告知・違和感の 音・レバブル
     function spinFx(plan) {
+        if (plan.shuketsuNotice) Records.seen('premium', 'shuketsuNotice');
         if (plan.kind === 'battle' && plan.revive === 'win') Records.add('revives');
         if (plan.kind === 'battle' && plan.ally && plan.ally.team) Records.seen('premium', 'teamJoin');
         if (plan.kind !== 'normal') return;
@@ -291,6 +294,7 @@
             }
         } else if (plan.kind === 'battle') {
             const t = plan.t;
+            if (plan.shuketsuNotice) { at(t.notice, 'cutin'); at(t.notice + 1, 'roar'); at(t.notice + 1, 'vibratePush'); }
             at(t.reach, 'reach');
             if (t.join !== undefined) at(t.join, 'chance');
             at(t.enemy, 'cutin');
@@ -306,6 +310,7 @@
             }
         } else if (plan.kind === 'jitan' && plan.reach) at(1.1, 'reach');
         else if (plan.kind === 'hashira') {
+            if (plan.shuketsuNotice) { at(0.3, 'cutin'); at(1.3, 'roar'); at(1.3, 'vibratePush'); }
             if (plan.sub === 'flash') {
                 // 勝負なし: 知らせ → 虹色の フラッシュ → 図柄ぞろい
                 at(plan.noticeAt, { rainbow: 'noticeRainbow', buru: 'vibratePush', lever: 'vibrateLever', senbare: 'noticeRainbow' }[plan.notice]);
@@ -546,7 +551,7 @@
     function renderCustomize() {
         const groups = {};
         Object.entries(Customize.OPTIONS).forEach(([k, o]) => { (groups[o.group] = groups[o.group] || []).push([k, o]); });
-        $('customize-body').innerHTML = Object.entries(groups).map(([g, list]) => `<h3>${g}</h3>` + list.map(([k, o]) => `<div class="cz-row"><span class="cz-label">${o.label}</span><div class="cz-choices">${Object.entries(o.choices).map(([v, name]) => `<button data-cz="${k}" data-value="${v}" class="${Customize.get(k) === v ? 'selected' : ''}">${name}</button>`).join('')}</div>${o.note ? `<small>${o.note}</small>` : ''}</div>`).join('')).join('');
+        $('customize-body').innerHTML = Object.entries(groups).map(([g, list]) => `<h3>${g}</h3>` + list.map(([k, o]) => `<div class="cz-row"><span class="cz-label">${o.label}</span><div class="cz-choices">${Object.entries(o.choices).map(([v, name]) => `<button data-cz="${k}" data-value="${v}" class="${Customize.get(k) === v ? 'selected' : ''}"${k === 'rashMode' && v === 'hashira' && game.machine && !game.machine.spec.payout ? ' disabled' : ''}>${name}</button>`).join('')}</div>${o.note ? `<small>${o.note}</small>` : ''}</div>`).join('')).join('');
     }
     $('customize-body').addEventListener('click', e => {
         const b = e.target.closest('[data-cz]');

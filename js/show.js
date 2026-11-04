@@ -165,6 +165,9 @@ const SHOW = {
             { dur: 5, bg: 'bonus', who: ['koori'], end: true }
         ]
     },
+    // RASH の カスタマイズ (2026-11-04 ユーザー指定。m.fx.rashMode): onioni スタンダード / koori 先読みの 期待度が 上がる / hashira (1/399 のみ) 3000発 以上の 当たりの 前に 集結告知
+    //   koori: hit は 当たりで 先読みが 出る 倍率・miss は はずれで 出る 倍率
+    rashMode: { koori: { hit: 1.6, miss: 0.2 }, noticeTime: 2.8 },
     // 先バレ (2026-11-04 ユーザー指定: 通常時も どちらの RASH も 発生。咆哮の ほうが 期待度が 高い)。通常時は hit: 当たりの ときの 割合 / rel: 出たら 当たる 割合。
     //   RASH 中は hashira.senbare の 割合。先バレの ときの ボタンの 色は 紫か 金 (金は RASH 突入濃厚)。gold: hit は 当たり (RASH へ 行く もの) の ときに 金に なる 割合・miss は それ以外
     senbare: { voice: { hit: 0.12, rel: 0.5 }, roar: { hit: 0.06, rel: 0.85 }, gold: { hit: 0.35, miss: 0.002 } },
@@ -312,16 +315,17 @@ const Show = (() => {
         return rng() < (toRash ? SHOW.senbare.gold.hit : SHOW.senbare.gold.miss) ? 'gold' : 'purple';
     }
     // RASH 中の 先バレ
-    function rashSenbare(result, rng) {
+    function rashSenbare(m, result, rng) {
         const i = isHit(result) ? 0 : 1, r = rng();
         const { voice, roar } = SHOW.hashira.senbare;
-        const senbare = r < roar[i] ? 'roar' : r < roar[i] + voice[i] ? 'voice' : null;
+        const K = m.fx.rashMode === 'koori' ? SHOW.rashMode.koori[i ? 'miss' : 'hit'] : 1;
+        const senbare = r < roar[i] * K ? 'roar' : r < (roar[i] + voice[i]) * K ? 'voice' : null;
         return { holdColor: 'white', shownColor: 'white', senbare, btn: senbare ? buttonColor(isHit(result), rng) : null };
     }
 
     // ----- 保留 -----
     function hold(config, m, fig, result, rng) {
-        if (m.mode === 'hst' || m.mode === 'st') return rashSenbare(result, rng);
+        if (m.mode === 'hst' || m.mode === 'st') return rashSenbare(m, result, rng);
         if (fig === 2) return { holdColor: 'white', shownColor: 'white' };
         // 1・3・5 そろい: 先読みなし
         if (isHit(result) && result.next === 'st' && m.mode === 'normal' && rng() < SHOW.sango) return { holdColor: 'white', shownColor: 'white', sango: true };
@@ -522,6 +526,22 @@ const Show = (() => {
         return p;
     }
 
+    // RASH 中の 当たりの 出玉を 変動の はじめに きめる (確率は そのまま。Machine.startBonus が result.forcePay を 使う)。3000発 以上なら true
+    function rashPay(m, result, rng) {
+        const pay = m.spec.payout;
+        if (!pay || !isHit(result)) return false;
+        let k = pay.rash.find(x => x.id === result.forcePay);
+        if (!k) {
+            k = pay.rash[pay.rash.length - 1];
+            let r = rng() * pay.rash.reduce((a, x) => a + x.weight, 0);
+            for (const x of pay.rash) if ((r -= x.weight) < 0) { k = x; break; }
+            result.forcePay = k.id;
+        }
+        if (k.uwanose && result.forceUwanose === undefined) result.forceUwanose = rng() < m.spec.uwanose.success;
+        return k.rounds >= pay.first || (Boolean(k.uwanose) && result.forceUwanose);
+    }
+    const hashiraNotice = (m, big) => big && m.fx.rashMode === 'hashira';
+
     // おにおにRASH の 仲間 (だれか 1 人 / チームなら 3 人)
     function pickAlly(good, rng, force) {
         const team = SHOW.teams[Math.floor(rng() * SHOW.teams.length)];
@@ -536,7 +556,8 @@ const Show = (() => {
             // 仲間の 合流 (当たりの 保留の 前に 来やすい)
             const hitAhead = m.holds[2].some(h => isHit(h)), fallAhead = m.holds[2].some(h => h.kind === 'fall');
             let joined = null;
-            if (!m.stAlly && rng() < (hitAhead ? B.join.aheadHit : fallAhead ? B.join.aheadFall : B.join.miss)) joined = m.stAlly = pickAlly(hitAhead, rng);
+            const K = m.fx.rashMode === 'koori' ? SHOW.rashMode.koori : { hit: 1, miss: 1 };
+            if (!m.stAlly && rng() < (hitAhead ? B.join.aheadHit * K.hit : fallAhead ? B.join.aheadFall * K.miss : B.join.miss * K.miss)) joined = m.stAlly = pickAlly(hitAhead, rng);
             const tease = rng() < SHOW.stTease;
             return { kind: 'stMiss', figures: figures(result, false, rng), tease: tease ? pickEnemyAny(m, rng) : null, joined, duration: joined ? T.stJoin : tease ? T.stTease : T.stMiss };
         }
@@ -548,7 +569,8 @@ const Show = (() => {
         else chance = rng() < (hit ? SHOW.chanceUp.hit : SHOW.chanceUp.fall);
         // 復活: 負けた ように 見えた バトルの revive が 復活に なる ように、当たりの 一部を「負けて 復活」に する
         const st = m.spec.st, reviveShare = B.revive / (1 - B.revive) * st.fallRate / st.hitRate;
-        const revive = !hit ? 'fail' : result.forceRevive || rng() < reviveShare ? 'win' : 'none';
+        const notice = hashiraNotice(m, rashPay(m, result, rng));
+        const revive = !hit ? 'fail' : !notice && (result.forceRevive || rng() < reviveShare) ? 'win' : 'none';
         const looksWin = revive === 'none', pool = looksWin ? 'hit' : 'fall';
         // 仲間: すでに 合流している か、リーチの 前に 合流する
         let ally = m.stAlly, joinNow = false;
@@ -565,6 +587,7 @@ const Show = (() => {
         // 時間の ならび
         const t = {};
         let c = 0.4;
+        if (notice) { t.notice = c; c += SHOW.rashMode.noticeTime; }   // 柱の氷モードの 集結告知
         if (joinNow) { t.join = c; c += BT.join; }   // 合流は リーチの 前
         t.reach = c + BT.reach - 0.4;
         c = t.reach + BT.reachHold;
@@ -578,7 +601,7 @@ const Show = (() => {
         if (!looksWin) { t.red = c; c += BT.red; t.revive = c; c += BT.revive; t.end = c; } else t.end = c;
         c += BT.end;
         return {
-            kind: 'battle', hit, enemy, enemyName: e.name, kill: e.kill, stars: e.stars, chance, action, revive, ally, self, foe, allyColor, t,
+            kind: 'battle', hit, shuketsuNotice: notice, enemy, enemyName: e.name, kill: e.kill, stars: e.stars, chance, action, revive, ally, self, foe, allyColor, t,
             textColor: result.forceText || pickText(SHOW.battleText[hit ? 'hit' : 'st'], rng),
             yaku: looksWin && rng() < 0.15,
             figures: hit ? [n, n, n] : [n, 'END', n],
@@ -600,10 +623,13 @@ const Show = (() => {
         const H = SHOW.hashira, T = SHOW.time;
         const hit = isHit(result);
         const base = { kind: 'hashira', hit, senbare: Boolean(result.senbare), figures: figures(result, false, rng), last: m.stLeft <= 0 };
+        // 柱の氷モード: 3000発 以上の 当たりは 集結告知の あと 勝負なしで そろう
+        const shuketsuNotice = hashiraNotice(m, rashPay(m, result, rng));
         // 基本は 勝負なし
-        if (hit && !result.forceBattle && (result.forceNotice || rng() < H.flash)) {
+        if (hit && (shuketsuNotice || (!result.forceBattle && (result.forceNotice || rng() < H.flash)))) {
             const notice = result.forceNotice || (result.senbare ? 'senbare' : pick(H.notices, rng));
-            return { ...base, sub: 'flash', notice, noticeAt: 0.5, duration: T.hFlash };
+            const extra = shuketsuNotice ? SHOW.rashMode.noticeTime : 0;
+            return { ...base, sub: 'flash', notice, shuketsuNotice, noticeAt: 0.5 + extra, duration: T.hFlash + extra };
         }
         if (!hit && !result.forceBattle && rng() >= H.missBattle) return { ...base, sub: 'quick', duration: T.hQuick };
         const rival = result.forceAlly || pick(hit ? H.rival.hit : H.rival.miss, rng);
