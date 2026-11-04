@@ -20,11 +20,7 @@ const Lcd = (() => {
     const FIG_CHARS = { 1: 'koori', 2: 'furukawa', 3: 'tomoishi', 4: 'okagappa', 5: 'hibikimakuri', 6: 'yamamou', 7: 'onioni', 8: 'hyougaryu', 9: 'harigeneral' };
     const HOLD_COLORS = { white: '#f0f4ff', blue: '#4a9cff', green: '#3adc6a', red: '#ff3a4a', gold: '#ffd84a', rainbow: 'rainbow' };
     const CUTIN_COLORS = { blue: '#2a6cff', green: '#18c050', red: '#e8102a', gold: '#ffc820' };
-    const TEAMS = [
-        { name: 'チーム5DX', members: ['okagappa', 'hibikimakuri', 'yamamou'] },
-        { name: 'チームASK-3', members: ['sasaki', 'kotani', 'asahara'] },
-        { name: 'チームお願いマッスル', members: ['shibata', 'ueno', 'ikekimu'] }
-    ];
+    const TEAMS = SHOW.teams;
 
     const st = {
         last: null,          // 最後に 止まった 変動 { plan, result }
@@ -159,6 +155,22 @@ const Lcd = (() => {
             ctx.fillStyle = '#10182a';
             ctx.fillRect(0, H - 24, W, 24);
             snow(now, 20, 6, -4, 'rgba(180,220,255,0.6)');
+        } else if (id === 'templeRun' || id === 'templeFight') {
+            // おにおにRASH: 柱の神殿の 中を ダッシュ
+            sky('#140a30', '#3a2470');
+            const off = id === 'templeRun' ? (now * 120) % 60 : 0;
+            ctx.fillStyle = '#d8d0f4';
+            ctx.fillRect(0, 12, W, 5);
+            for (let x = -off; x < W + 20; x += 60) {
+                const g = ctx.createLinearGradient(x, 0, x + 18, 0);
+                g.addColorStop(0, '#5a6ad0'); g.addColorStop(0.5, '#d8e8ff'); g.addColorStop(1, '#5a4ac0');
+                ctx.fillStyle = g;
+                ctx.fillRect(x, 17, 18, H - 41);
+            }
+            ctx.fillStyle = '#2a1a4a';
+            ctx.fillRect(0, H - 24, W, 24);
+            ctx.fillStyle = '#6a5aa0';
+            for (let x = -((now * 240) % 40) * (id === 'templeRun' ? 1 : 0); x < W; x += 40) ctx.fillRect(x, H - 22, 20, 2);
         } else if (id === 'black') {
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, W, H);
@@ -334,6 +346,15 @@ const Lcd = (() => {
     function figure(n, cx, cy, size, opt = {}) {
         const w = size * 0.86, h = size;
         const x = cx - w / 2, y = cy - h / 2;
+        if (n === 'END') {
+            // END 図柄 (おにおにRASH の おわり)
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+            ctx.fillStyle = '#5a0a14';
+            ctx.fillRect(x, y, w, h);
+            text('END', cx, cy, Math.round(size * 0.36), '#ffffff', 'center', { bold: true, strokeColor: '#a00a1a' });
+            return;
+        }
         const odd = n % 2 === 1;
         ctx.save();
         if (opt.alpha !== undefined) ctx.globalAlpha = opt.alpha;
@@ -387,6 +408,7 @@ const Lcd = (() => {
         }
     }
     const BIG = { y: 64, size: 52, gap: 74 };
+    const TOP = { y: 28, size: 26, gap: 30 };   // おにおにRASH は 図柄を 小さく して おにおにを 見せる
     const SMALL = { y: 14, size: 18, gap: 18, x0: 20 };
 
     // ----- 保留 (下に 4 つ) -----
@@ -567,6 +589,8 @@ const Lcd = (() => {
             st.hashiraFlash = false;
             st.crackSnap = null;
             st.crackSmash = false;
+            st.holdPrompt = false;
+            st.reviveFlash = false;
             if (e.plan.yaku && e.plan.kind === 'normal') st.gimPlanned = true;
             if (e.plan.story !== undefined) {
                 const s = SHOW.stories[e.plan.story];
@@ -575,6 +599,7 @@ const Lcd = (() => {
             }
         } else if (e.type === 'spinEnd') {
             st.last = { plan: e.plan, result: e.result, at: st.now };
+            st.holdPrompt = false;
         } else if (e.type === 'bonusStart') {
             st.bonus = { rounds: e.rounds, round: 0, count: 0, next: e.next, from: e.from, chain: e.chain, start: st.now, payKind: e.payKind, charge: e.charge };
             st.uwanose = null;
@@ -675,7 +700,7 @@ const Lcd = (() => {
     }
 
     function modeBg(m) {
-        if (m.mode === 'st') return 'st';
+        if (m.mode === 'st') return 'templeRun';
         if (m.mode === 'hst') return 'hashiraRash';
         if (m.mode === 'jitan' || m.mode === 'jitanLast') return 'jitan';
         return SHOW.stories[m.story].bg;
@@ -712,8 +737,8 @@ const Lcd = (() => {
             idleCast(m, now);
             reels(BIG, figs, [1, 1, 1], now);
         } else {
-            reels(m.mode === 'st' ? { y: 60, size: 44, gap: 62 } : BIG, figs, [1, 1, 1], now);
-            if (m.mode === 'st') Art.draw(ctx, 'onioni', 30, H - 20, { height: 34, frame: Math.floor(now * 3) });
+            if (m.mode === 'st') { stRunners(m, now); reels(TOP, figs, [1, 1, 1], now); }
+            else reels(BIG, figs, [1, 1, 1], now);
         }
         holds(m, now);
     }
@@ -1271,82 +1296,117 @@ const Lcd = (() => {
     }
 
     // ----- ST -----
+    // 技の 文字の 色 (白 青 緑 赤 金・敵は 紫 赤 金)
+    const moveColor = (c, now) => ({ blue: '#4f9bff', green: '#3fdf6f', purple: '#c080ff' }[c] || enemyTextColor(c, now));
+    // ダッシュする おにおにと 仲間
+    function stRunners(m, now, ally = m.stAlly) {
+        const walk = Math.floor(now * 10);
+        Art.draw(ctx, 'onioni', W / 2 + 30, H - 20, { height: 46, frame: walk });
+        if (ally) ally.members.forEach((id, i) => Art.draw(ctx, id, W / 2 - 22 - i * 30, H - 20, { height: 36, frame: walk + i }));
+    }
     function drawStMiss(m, plan, el, D, now) {
-        background('st', now);
+        background('templeRun', now);
         header(m, now);
+        stRunners(m, now);
         const stopped = [el > D * 0.45, el > D - 0.2, el > D * 0.65];
-        reels({ y: 60, size: 44, gap: 62 }, plan.figures, stopped, now, { speed: 22 });
-        Art.draw(ctx, 'onioni', 30, H - 20, { height: 34, frame: Math.floor(now * 4) });
+        reels(TOP, plan.figures, stopped, now, { speed: 22 });
         if (plan.tease) {
             // 相手の 気配 (かげが 出て 消える)
             const k = el / D;
             Art.draw(ctx, plan.tease, W - 40, H - 20, { height: 50, alpha: Math.sin(k * Math.PI) * 0.7, silhouette: true });
             if (k > 0.2 && k < 0.8) text('…けはい？', W - 40, 30, 9, '#ffb0c0');
         }
+        if (plan.joined) cutin('#1a4a8a', plan.joined.members[0], plan.joined.team ? `${plan.joined.team} 合流！` : 'なかまが 合流！', (el - 0.3) / 2.4, now, plan.joined.team ? 'rainbow' : '#ffffff');
         holds(m, now);
     }
 
-    // おにおにの バトル (当たり = 撃破 / 転落 = 敗北)
+    // おにおにの バトル (2026-11-04 ユーザー指定)。流れは show.js の stPlan。plan.t が それぞれの はじまる 秒
     function drawBattle(m, plan, el, D, now) {
-        const e = SHOW.enemies[plan.enemy];
-        background('battle', now);
-        const walk = Math.floor(now * 6);
-        if (el < 1.0) {
-            background('st', now);
-            reels({ y: 60, size: 44, gap: 62 }, [7, 7, 7], [0, 0, 0], now, { speed: 26 });
-            return;
-        }
-        // 1) 相手の 登場 (1〜3.2 秒): 名前・流派・撃破率の 星
-        if (el < 3.2) {
-            const k = (el - 1) / 2.2;
-            Art.draw(ctx, plan.enemy, W / 2 + 50, H - 20, { height: 80 * ease(k * 2), frame: walk, flip: true });
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
-            ctx.fillRect(0, 20, W * ease(k * 3), 46);
-            text('VS', 28, 42, 20, '#ff3a4a', 'center', { bold: true });
-            text(e.name, 110, 36, 16, enemyTextColor(plan.textColor, now), 'center', { bold: true });
-            text(e.ryuha, 110, 56, 9, '#ffffff');
-            // 撃破率の 星 (相手ごと)
-            const stars = Math.round(e.kill * 5);
-            for (let i = 0; i < 5; i++) text('★', 200 + i * 10, 46, 10, i < stars ? '#ffd84a' : '#444', 'center', { stroke: false });
-            text('撃破率', 220, 34, 7, '#ffffff');
-            return;
-        }
-        // 2) たたかう
-        const p = el - 3.2;
-        const hitEnd = D - 2.4;   // 決め手の あと けっか
-        const clash = Math.sin(p * 5) * (p < hitEnd - 3.2 ? 8 : 0);
-        Art.draw(ctx, 'onioni', 70 + clash, H - 28, { height: 50, frame: walk });
-        Art.draw(ctx, plan.enemy, 186 - clash, H - 28, { height: 64, frame: walk, flip: true });
-        if (Math.floor(p * 5) % 3 === 0) { ctx.fillStyle = 'rgba(255,240,160,0.8)'; ctx.fillRect(122 + clash, 60, 10, 10); }
-        text(`VS ${e.name}`, W / 2, 10, 10, enemyTextColor(plan.textColor, now), 'center', { bold: true });
+        const t = plan.t, e = SHOW.enemies[plan.enemy], B = SHOW.stBattle, walk = Math.floor(now * 6);
+        const dashing = el < t.enemy, lost = plan.revive !== 'none';
+        background(dashing ? 'templeRun' : 'templeFight', now);
         header(m, now);
-        // チャンスアップ (4.5 秒あたり)
-        if (plan.chance) {
-            const ck = (el - 4.6) / 1.6;
-            if (plan.enemy === 'harigeneral') cutin('gold', 'onioni', 'チャンスアップ！', ck, now);
-            else cutin('red', 'onioni', 'チャンスアップ！', ck, now);
-        }
-        // 決め手
-        const aFrom = D - 5.2, aTo = D - 3.0;
-        const a = actionWindow(plan.action, el, aFrom, aTo);
-        if (a && a.done && plan.yaku && !st.gimStarted) { st.gimStarted = true; startGimmick('kanabo', 2.4); }
-        drawPrompt(a, now);
-        if (el >= aTo) {
-            const r = (el - aTo) / (D - aTo);
-            if (plan.hit) {
-                // 撃破: 相手が ふきとぶ
-                ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.7 - r * 2)})`;
-                ctx.fillRect(0, 0, W, H);
-                text('撃破！！', W / 2, 54, 30 * (0.5 + 0.5 * ease(r * 4)), 'rainbow', 'center', { bold: true });
-                text(`${m.chain + 1}連 GET`, W / 2, 86, 12, '#ffd84a', 'center');
-                reels({ y: 118, size: 18, gap: 22 }, [7, 7, 7], [1, 1, 1], now);
-            } else {
-                ctx.fillStyle = `rgba(20,0,10,${Math.min(0.7, r * 1.4)})`;
-                ctx.fillRect(0, 0, W, H);
-                text('おにおにが たおされた…', W / 2, 60, 13, '#ff8aa0', 'center');
+        if (dashing) {
+            stRunners(m, now, t.join !== undefined && el >= t.join + 0.6 ? plan.ally : t.join === undefined ? plan.ally : null);
+            if (el >= t.reach) text('リーチ', W / 2, 54, 14, Math.floor(now * 6) % 2 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
+            if (t.join !== undefined) cutin('#1a4a8a', plan.ally.members[0], plan.ally.team ? `${plan.ally.team} 合流！` : 'なかまが 合流！', (el - t.join) / B.time.join, now, plan.ally.team ? 'rainbow' : '#ffffff');
+        } else if (el < t.self) {
+            // 敵を 発見: 敵の カットインと 撃破期待度
+            if (el < t.enemy + B.time.enemy) {
+                const k = (el - t.enemy) / B.time.enemy;
+                cutin('#1a1030', plan.enemy, e.name, k, now, enemyTextColor(plan.textColor, now));
+                if (k > 0.12 && k < 0.88) {
+                    text('撃破期待度', 170, 84, 8, '#ffffff');
+                    for (let i = 0; i < 5; i++) text('★', 146 + i * 12, 96, 11, i < plan.stars ? '#ffd84a' : '#555566', 'center', { stroke: false });
+                    if (plan.chance) text('チャンスアップ！', 170, 40, 10, '#ffd84a', 'center', { bold: true });
+                }
+            } else if (plan.ally) {
+                // 仲間が 先に たたかう
+                const len = plan.ally.team ? B.time.team : B.time.ally, k = (el - t.ally) / len, n = plan.ally.members.length;
+                const i = Math.min(n - 1, Math.floor(k * n)), id = plan.ally.members[i];
+                if (plan.ally.team && i === 0 && k < 0.08) text(plan.ally.team, W / 2, 20, 12, 'rainbow', 'center', { bold: true });
+                cutin('#1a4a8a', id, B.allyMoves[id], k * n - i, now, moveColor(plan.allyColor, now));
             }
+        } else if (el < t.foe) {
+            cutin('#6a0a18', 'onioni', B.selfMoves[plan.self], (el - t.self) / B.time.self, now, moveColor(plan.self, now));
+        } else if (el < t.clash) {
+            const line = plan.foe === 'gold' ? '威嚇…！' : plan.foe === 'red' ? `${e.name}の 大技！` : `${e.name}の こうげき！`;
+            cutin('#2a0a4a', plan.enemy, line, (el - t.foe) / B.time.foe, now, moveColor(plan.foe, now));
+        } else if (el < t.result) {
+            // 激突: ボタン か レバー
+            const rush = ease((el - t.clash) / B.time.clash);
+            Art.draw(ctx, 'onioni', 60 + (W / 2 - 24 - 60) * rush, H - 26, { height: 50, frame: walk });
+            if (plan.ally) plan.ally.members.forEach((id, i) => Art.draw(ctx, id, 24 + i * 22 + (W / 2 - 70) * rush, H - 26, { height: 30, frame: walk + i }));
+            Art.draw(ctx, plan.enemy, W - 60 - (W - 60 - W / 2 - 24) * rush, H - 26, { height: 60, frame: walk, flip: true });
+            const a = actionWindow(plan.action, el, t.action, t.result);
+            if (a) a.text = 'レバーを引け！';
+            if (a && a.done && plan.yaku && !st.gimStarted) { st.gimStarted = true; startGimmick('kanabo', 2.4); }
+            drawPrompt(a, now);
+        } else if (!lost || el >= t.end) {
+            // けっか: 図柄ぞろい / END 図柄
+            const r = el - (lost ? t.end : t.result);
+            const win = plan.hit;
+            if (win) {
+                if (plan.revive === 'win') kakusei(W / 2, H - 4, 96, now);
+                else Art.draw(ctx, 'onioni', W / 2, H - 22, { height: 40, frame: walk });
+                ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.7 - r)})`;
+                ctx.fillRect(0, 0, W, H);
+                reels({ y: 50, size: 34, gap: 48 }, plan.figures, [1, 1, 1], now, { gold: true });
+                text(plan.revive === 'win' ? '覚醒 撃破！！' : '撃破！！', W / 2, 18, 18, 'rainbow', 'center', { bold: true });
+                text(`${m.chain + 1}連 GET`, W / 2, 84, 12, '#ffd84a', 'center');
+            } else {
+                ctx.fillStyle = 'rgba(20,0,10,0.75)';
+                ctx.fillRect(0, 0, W, H);
+                reels({ y: 56, size: 40, gap: 54 }, plan.figures, [1, 1, 1], now);
+                text('おにおにが たおされた…', W / 2, 104, 12, '#ff8aa0', 'center');
+            }
+            return;
+        } else if (el < t.revive) {
+            // 負けた: 画面が 真っ赤に 点滅
+            ctx.fillStyle = Math.floor(now * 10) % 2 ? '#ff0a1a' : '#5a0008';
+            ctx.fillRect(0, 0, W, H);
+            Art.draw(ctx, 'onioni', W / 2, H - 30, { height: 44, rot: Math.PI / 2 });
+            text(e.win, W / 2, 40, 12, '#ffffff', 'center', { bold: true });
+        } else {
+            // 復活チャレンジ: ボタン長押しで ゲージが のびる (結果は おなじ)
+            st.holdPrompt = true;
+            const k = (el - t.revive) / B.time.revive;
+            ctx.fillStyle = '#2a0006';
+            ctx.fillRect(0, 0, W, H);
+            Art.draw(ctx, 'onioni', W / 2, H - 30, { height: 44, rot: Math.PI / 2 * (1 - k * 0.3) });
+            text('復活チャレンジ', W / 2, 24, 18, Math.floor(now * 6) % 2 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
+            text('ボタン 長押しで 覚醒せよ！', W / 2, 44, 11, '#ffffff');
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(W / 2 - 70, 56, 140, 10);
+            ctx.fillStyle = st.holding ? '#ff8a2a' : '#c83a2a';
+            ctx.fillRect(W / 2 - 68, 58, 136 * k, 6);
+            drawNormalHint(now);
         }
+        // 図柄 (上に 小さく)。まんなかは けっかまで 回る
+        if (el < t.result) reels(TOP, plan.figures, [el >= 0.6, false, el >= t.reach], now, { speed: 20 });
+        holds(m, now);
     }
+    const drawNormalHint = now => { if (Math.floor(now * 4) % 2) text('PUSH', W / 2, H - 12, 10, '#ffd84a', 'center', { bold: true }); };
 
     // ----- 時短 -----
     function drawJitan(m, plan, el, D, now) {

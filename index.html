@@ -40,7 +40,7 @@
             <!-- RASH えらび: ST へ 行く 大当たりの あいだに (1 / 2 キーでも) -->
             <div id="rash-choice" class="rash-choice" hidden>
                 <p>どっちの RASH に する？</p>
-                <button data-rash="onioni"><span class="rc-name">おにおにRASH <b class="lt-badge" hidden>LT</b></span><span class="rc-note">転落型。おにおにが たおされるまで 何回でも</span></button>
+                <button data-rash="onioni"><span class="rc-name">おにおにRASH <b class="lt-badge" hidden>LT</b></span><span class="rc-note">転落型。リーチで バトル。おにおにが たおされるまで 何回でも</span></button>
                 <button data-rash="hashira"><span class="rc-name">柱の氷RASH <b class="lt-badge" hidden>LT</b></span><span class="rc-note">100回の ST。一発告知・先バレ・バトル</span></button>
             </div>
             <div class="status">
@@ -150,6 +150,28 @@
                     <option value="okadishi">オカディシ</option>
                     <option value="kanezu">カネーズ</option>
                 </select>
+                <select id="debug-st-ally" aria-label="おにおにRASH の 仲間">
+                    <option value="">仲間: 抽選</option>
+                    <option value="one">1 人</option>
+                    <option value="team">チーム</option>
+                </select>
+                <select id="debug-st-self" aria-label="おにおにの 技の 色">
+                    <option value="">自分の 技: 抽選</option>
+                    <option value="white">白</option>
+                    <option value="blue">青</option>
+                    <option value="green">緑</option>
+                    <option value="red">赤</option>
+                    <option value="gold">金</option>
+                </select>
+                <select id="debug-st-foe" aria-label="敵の 技の 色">
+                    <option value="">敵の 技: 抽選</option>
+                    <option value="purple">紫</option>
+                    <option value="red">赤</option>
+                    <option value="gold">金 (確定)</option>
+                </select>
+                <button id="debug-st-win">RASH: 次は 撃破</button>
+                <button id="debug-st-revive">RASH: 次は 復活</button>
+                <button id="debug-st-lose">RASH: 次は 転落</button>
                 <button id="debug-st">ST に 入る</button>
                 <button id="debug-jitan">時短に 入る</button>
                 <button id="debug-hst">柱の氷RASH に 入る</button>

@@ -67,6 +67,7 @@
             battle: params.get('battle') === '1', ally: params.get('ally') || undefined, attack: params.get('attack') || undefined,
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
             pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
+            stAlly: params.get('stAlly') || undefined, self: params.get('self') || undefined, foe: params.get('foe') || undefined, revive: params.get('revive') === '1',
             mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
             gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', promo: params.has('promo') ? params.get('promo') === '1' : undefined, step: params.get('step') || undefined
         };
@@ -203,6 +204,8 @@
 
     // 変動が はじまった ときの 記録・先告知・違和感の 音・レバブル
     function spinFx(plan) {
+        if (plan.kind === 'battle' && plan.revive === 'win') Records.add('revives');
+        if (plan.kind === 'battle' && plan.ally && plan.ally.team) Records.seen('premium', 'teamJoin');
         if (plan.kind !== 'normal') return;
         Records.add('spins');
         if (plan.reach) Records.seen('reach', plan.reach);
@@ -269,10 +272,20 @@
                 at(sceneStart + len - 1.6, plan.hit ? 'gekiha' : 'lose');
             }
         } else if (plan.kind === 'battle') {
-            at(1.0, 'cutin');
-            for (let k = 3.4; k < D - 5.4; k += 0.6) at(k, 'clash');
-            if (plan.chance) at(4.6, 'chance');
-            at(D - 3.0, plan.hit ? 'gekiha' : 'fall');
+            const t = plan.t;
+            at(t.reach, 'reach');
+            if (t.join !== undefined) at(t.join, 'chance');
+            at(t.enemy, 'cutin');
+            if (plan.ally) at(t.ally, plan.ally.team ? 'chance' : 'cutin');
+            at(t.self, plan.self === 'white' ? 'cutin' : 'chance');
+            at(t.foe, plan.foe === 'gold' ? 'roar' : 'cutin');
+            at(t.clash, 'clash');
+            if (plan.revive === 'none') at(t.result, 'gekiha');
+            else {
+                at(t.result, 'hurt');
+                at(t.revive, 'challenge');
+                at(t.end, plan.revive === 'win' ? 'gekiha' : 'fall');
+            }
         } else if (plan.kind === 'jitan' && plan.reach) at(1.1, 'reach');
         else if (plan.kind === 'hashira') {
             if (plan.sub === 'ippatsu') at(0.3, 'ippatsu');
@@ -592,6 +605,11 @@
         $('debug-promo-lose').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: game.machine.spec.firstHit[1].next, promo: true, ...staged() }));
         $('debug-opening').addEventListener('click', () => Lcd.playStory('opening'));
         $('debug-ending').addEventListener('click', () => Lcd.playStory('ending', 10));
+        const stOpt = () => ({ enemy: enemy(), stAlly: $('debug-st-ally').value || undefined, self: $('debug-st-self').value || undefined, foe: $('debug-st-foe').value || undefined, textColor: $('debug-text').value || undefined });
+        const inSt = () => { if (game.machine.mode !== 'st') Machine.debugMode(game.machine, 'st'); };
+        $('debug-st-win').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'hit', stOpt()); });
+        $('debug-st-revive').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'hit', { ...stOpt(), revive: true, foe: stOpt().foe === 'gold' ? undefined : stOpt().foe }); });
+        $('debug-st-lose').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'fall', stOpt()); });
         $('debug-sango').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', sango: true }));
         $('debug-stage').addEventListener('change', e => { if (e.target.value !== '') Machine.debugStory(game.machine, Number(e.target.value)); });
         $('debug-yutime').addEventListener('click', () => { if (game.machine.spec.yutime) game.machine.normalSpins = game.machine.spec.yutime.at; });

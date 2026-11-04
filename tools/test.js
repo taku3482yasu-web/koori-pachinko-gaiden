@@ -384,6 +384,35 @@ for (const specId of Object.keys(CONFIG.specs)) {
         check(at === spec.yutime.at && m.mode === 'jitan', `${spec.label}: 遊タイムは ${spec.yutime.at} 回転で 時短 (${at} 回転)`);
     }
 }
+// おにおにRASH の バトル (2026-11-04 ユーザー指定)
+for (const specId of Object.keys(CONFIG.specs)) {
+    const spec = CONFIG.specs[specId], rng = seeded(SEED + 8), m = Machine.create(CONFIG, specId, rng);
+    m.mode = 'st';
+    const cont = spec.st.hitRate / (spec.st.hitRate + spec.st.fallRate);
+    const c = {};
+    const add = k => { c[k] = (c[k] || 0) + 1; };
+    let bad = 0;
+    for (let i = 0; i < 300000; i++) {
+        const hit = rng() < cont;
+        m.stAlly = null;
+        const p = Show.plan(CONFIG, m, { fig: 2, result: { kind: hit ? 'hit' : 'fall' }, holdsLeft: 0 }, rng);
+        const h = hit ? 'H:' : 'F:';
+        add(h + 'all');
+        if (p.revive !== 'none') { add('lost'); if (hit) add('revived'); }
+        add(h + 'self:' + (p.self === 'white' ? 'white' : 'color'));
+        add(h + 'foe:' + p.foe);
+        if (p.ally) { add(h + (p.ally.team ? 'team' : 'one')); if (p.ally.team && p.ally.members.length !== 3) bad++; }
+        if (hit ? p.figures[1] !== p.figures[0] : p.figures[1] !== 'END' || p.figures[0] !== p.figures[2]) bad++;
+        if (p.revive === 'win' && p.foe === 'gold') bad++;
+        if (!(p.t.reach < p.t.enemy && p.t.enemy < p.t.self && p.t.self < p.t.foe && p.t.foe < p.t.clash && p.t.clash < p.t.action && p.t.action < p.t.result && p.t.result <= p.t.end && p.t.end < p.duration)) bad++;
+    }
+    const trust = k => (c['H:' + k] || 0) / ((c['H:' + k] || 0) + (c['F:' + k] || 0));
+    check(bad === 0, `${spec.label}: バトルの 図柄 (勝ちは そろう・負けは まんなか END)・時間の ならび`);
+    check(near(c.revived / c.lost, SHOW.stBattle.revive, 0.01), `${spec.label}: 復活チャレンジ ${pct(c.revived / c.lost)}`);
+    check(trust('self:color') > 0.8, `${spec.label}: 白以外の 技 撃破率 ${pct(trust('self:color'))} (白 ${pct(trust('self:white'))})`);
+    check(trust('foe:gold') === 1 && trust('foe:red') > trust('foe:purple'), `${spec.label}: 敵の 技 紫 ${pct(trust('foe:purple'))} < 赤 ${pct(trust('foe:red'))} < 金 確定`);
+    check(trust('team') > 0.9 && trust('team') > trust('one'), `${spec.label}: 仲間 1 人 ${pct(trust('one'))}・チーム ${pct(trust('team'))}`);
+}
 // 敵の 文字の 色 (ST・柱の氷RASH): 金は 80% 以上
 for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
     const w = SHOW.battleText, g = w.hit.gold * chance, b = w[mode].gold * (1 - chance);
