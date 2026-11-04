@@ -157,7 +157,7 @@ const CONFIG = {
             jitanSpins: 100,
             // 遊タイム (天井。2026-11-04 ユーザー指定: 前作から): 通常時に at 回 まわして 当たらなければ 時短 jitanSpins 回。回数は Claude が きめた
             yutime: { at: 950 },
-            st: { hitRate: 1 / 60, fallRate: 1 / 240 },
+            st: { hitRate: 1 / 30, fallRate: 1 / 120 },
             // 柱の氷RASH: 100 回で 当たりを ねらう (1 − (1 − 1/62.6)^100 ≒ 80%)
             hashira: { hitRate: 1 / 62.6, spins: 100 },
             target: { st: 0.5, continuation: 0.8 },
@@ -188,7 +188,7 @@ const CONFIG = {
             firstHit: [{ weight: 50, next: 'st' }, { weight: 50, next: 'normal' }],
             jitanSpins: 100,
             yutime: { at: 1200 },
-            st: { hitRate: 1 / 70, fallRate: 1 / 210 },
+            st: { hitRate: 1 / 35, fallRate: 1 / 105 },
             hashira: { hitRate: 1 / 72.6, spins: 100 },   // 1 − (1 − 1/72.6)^100 ≒ 75%
             target: { st: 0.5, continuation: 0.75 },
             // 設定 1〜6 の 釘 (設定1〜5 は 1000円で 約 12 〜 19 回転。2026-11-04 ユーザー指定: 時短を なくした ぶん 回転数を ふやした)
