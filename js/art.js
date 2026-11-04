@@ -155,8 +155,8 @@ const NEW_ART = {
     }
 };
 
-// ミニゲームの キャラで、まだ 絵が ない 2 人は いまは 近い キャラの 絵を 仮に 使う (絵が できたら ここを かえる)
-LEGACY_ART.okamou = LEGACY_ART.okagappa;
+// ミニゲームの キャラの 絵 (2026-11-04 ユーザー指定): おかもぅ = やまもぅ・マッスルイケノーブル = マッスルウエノーブル
+LEGACY_ART.okamou = LEGACY_ART.yamamou;
 LEGACY_ART.ikenoble = LEGACY_ART.ueno;
 
 const Art = (() => {
