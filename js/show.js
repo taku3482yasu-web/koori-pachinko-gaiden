@@ -348,7 +348,9 @@ const Show = (() => {
             return [n, n, n];
         }
         if (reach) {
-            const n = d();
+            // 7 の リーチは 当たり確定 (2026-11-04 ユーザー指定) なので はずれでは 出さない
+            let n = d();
+            while (n === 7) n = d();
             let c = d();
             if (c === n) c = n % 9 + 1;
             return [n, c, n];
@@ -537,7 +539,8 @@ const Show = (() => {
         const allyColor = ally ? pick(B.self[pool], rng) : null;
         // 決め手: 金棒レバーは ほぼ 撃破
         const action = looksWin ? (rng() < 0.35 ? 'lever' : 'push') : (rng() < 0.03 ? 'lever' : 'push');
-        const odd = [1, 3, 5, 7, 7, 7], n = odd[Math.floor(rng() * odd.length)];
+        // 7 の リーチは 当たり確定なので 転落では 出さない
+        const odd = hit ? [1, 3, 5, 7, 7, 7] : [1, 3, 5], n = odd[Math.floor(rng() * odd.length)];
         // 時間の ならび
         const t = {};
         let c = 0.4;
