@@ -208,5 +208,5 @@ const Art = (() => {
         ctx.drawImage(img, -w / 2, -h + bob, w, h);
         ctx.restore();
     }
-    return { draw, has, size };
+    return { draw, has, size, clearCache: () => cache.clear() };
 })();

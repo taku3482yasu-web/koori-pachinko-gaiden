@@ -18,6 +18,8 @@
         set(k, v) { try { localStorage.setItem('koori-gaiden-' + k, JSON.stringify(v)); } catch (e) { /* 保存できない */ } }
     };
 
+    Customize.load();
+    Records.load();
     const game = {
         balls: Number(params.get('balls')) || CONFIG.balls.start,
         strength: store.get('strength', CONFIG.launch.defaultStrength),
@@ -28,20 +30,24 @@
         lastAim: 'left', zoom: 0, paused: true,
         stats: { launched: 0, launchedLeft: 0, heso: 0, paid: 0 },
         record: store.get('record', { plays: 0, firstHits: 0, bestChain: 0, bestBalls: 0 }),
-        chainStartBalls: 0
+        chainStartBalls: 0, history: [], nextSave: 5, pushAt: null
     };
     if (params.has('strength')) game.strength = Number(params.get('strength'));
     Lcd.init();
 
     // ----- 台を 用意する -----
     // setting: 設定 1〜6 (釘が かわる) / settingKnown: 自分で えらんだか (おまかせの ときは 画面に 出さない)
-    function startMachine(specId, setting, settingKnown) {
+    // saved: 前回の つづき (saveGame の 中身)
+    function startMachine(specId, setting, settingKnown, saved = null) {
         const spec = CONFIG.specs[specId];
         game.specId = specId;
         game.setting = setting;
         game.settingKnown = settingKnown;
-        game.hints = [];
-        game.machine = Machine.create(CONFIG, specId);
+        game.hints = saved ? saved.hints : [];
+        game.history = saved ? saved.history : [];
+        if (saved) game.balls = saved.balls;
+        game.machine = saved ? Machine.restore(CONFIG, saved.machine) : Machine.create(CONFIG, specId);
+        syncCustomize();
         Machine.setRashType(game.machine, store.get('rash', 'onioni'));
         game.board = Board.build(CONFIG, spec.settings[setting - 1]);
         game.world = { board: game.board, balls: [], rng: Math.random, events: [] };
@@ -53,7 +59,7 @@
         game.paused = false;
         game.record.plays++;
         store.set('record', game.record);
-        const force = params.get('force');
+        const force = saved ? null : params.get('force');
         const opt = {
             next: force === 'hitJitan' ? 'jitan' : 'st', enemy: params.get('enemy'), yaku: params.get('yaku') === '1',
             reach: params.get('reach') || undefined, gun: params.has('gun') ? params.get('gun') === '1' : undefined,
@@ -61,7 +67,7 @@
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
             pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
             mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
-            gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined
+            gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', step: params.get('step') || undefined
         };
         if (force === 'st' || force === 'jitan' || force === 'hst') Machine.debugMode(game.machine, force);
         else if (force === 'stHit' || force === 'fall') { Machine.debugMode(game.machine, 'st'); Machine.debugHold(game.machine, force === 'fall' ? 'fall' : 'hit', opt); }
@@ -71,11 +77,41 @@
         else if (force) Machine.debugHold(game.machine, 'hit', opt);
     }
 
+    // カスタマイズを 台・液晶・音に わたす
+    function syncCustomize() {
+        const c = Customize.get;
+        if (game.machine) game.machine.fx = { senyomi: c('senyomi'), notice: c('notice'), line: c('line') };
+        Lcd.setOptions({ yaku: c('yaku'), leverTap: c('leverTap') === 'on' });
+        Sound.setVolume(Customize.volume('seVolume'));
+        if (typeof Bgm !== 'undefined') Bgm.setVolume(Customize.volume('bgmVolume'));
+    }
+    Customize.onChange(key => {
+        syncCustomize();
+        if (['theme', 'ball', 'koori'].includes(key) && game.board) game.view = BoardView.create(canvas, game.board, CONFIG);
+    });
+
+    // 前回の つづき (2026-11-04 ユーザー指定: 前作から)。5 秒ごとと ページを とじる ときに 保存する。確認用の URL では 保存しない
+    function saveGame() {
+        if (!game.machine || params.has('spec')) return;
+        store.set('save', { specId: game.specId, setting: game.setting, known: game.settingKnown, balls: game.balls, hints: game.hints, history: game.history, machine: Machine.snapshot(game.machine) });
+    }
+    window.addEventListener('pagehide', saveGame);
+
+    // 早送り (前作から): 台の ボタンの 長押しで 演出を 結果の 手前まで とばす
+    function skipSpin(m) {
+        const sp = m.spin;
+        if (!sp || Lcd.prompt() || Customize.get('skip') !== 'on') return;
+        const to = sp.duration - 2.2;
+        if (sp.elapsed < to) { sp.elapsed = to; cues = []; }
+    }
+
     // ----- 1 フレーム -----
     let time = 0;
     function tick(dt) {
         time += dt;
         const m = game.machine;
+        if (time >= game.nextSave) { game.nextSave = time + 5; saveGame(); }
+        if (game.pushAt !== null && time - game.pushAt > 0.7) skipSpin(m);
         const aim = Machine.aim(m);
         if (game.auto) game.strength = CONFIG.launch.presets[aim];
         if ((game.fireOn || game.holding || game.auto) && time >= game.nextShot && game.balls > 0 && game.world.balls.length < CONFIG.ball.maxBalls) {
@@ -94,7 +130,7 @@
         Lcd.tick(dt);
         if (aim !== game.lastAim) {
             game.lastAim = aim;
-            if (store.get('autoAim', true)) setStrength(CONFIG.launch.presets[aim]);
+            if (Customize.get('autoAim') === 'on') setStrength(CONFIG.launch.presets[aim]);
             if (aim === 'right') Lcd.banner('右打ち →', null, '#ff6a8a', 1.6);
             else Lcd.banner('左打ちに もどしてね', null, '#bfe8ff', 1.6);
         }
@@ -122,31 +158,57 @@
             if (e.result.senbare && m.mode === 'hst') senbare(e.result.senbare);
             else Sound.play('hold');
         }
-        else if (e.type === 'spinStart') { Sound.play('stop'); schedule(e.plan, e.duration); }
+        else if (e.type === 'spinStart') { Sound.play('stop'); schedule(e.plan, e.duration); spinFx(e.plan); }
         else if (e.type === 'spinEnd') { if (e.result.kind === 'hit') Sound.play('win'); }
         else if (e.type === 'bonusStart') {
             Sound.play(e.charge ? 'chance' : 'fanfare');
             if (e.next === 'st' && !e.charge) openRashChoice();
             if (e.from === 'normal' && !e.charge) { game.record.firstHits++; game.chainStartBalls = game.balls; }
+            Records.add(e.charge ? 'charges' : 'hits');
+            game.history.unshift({ kind: e.charge ? 'チャージ' : e.from === 'normal' ? '初当たり' : 'RASH', rounds: e.rounds, spins: m.normalSpins, chain: e.chain });
+            game.history.length = Math.min(game.history.length, 20);
         } else if (e.type === 'ending') {
             // チャージから ST: ここで はじめて 知らせる
-            if (e.charge && e.next === 'st') { Sound.play('fanfare'); openRashChoice(); }
+            if (e.charge && e.next === 'st') { Sound.play('fanfare'); openRashChoice(); Records.add('chargeSt'); }
         } else if (e.type === 'roundStart') Sound.play('round');
         else if (e.type === 'uwanoseStart') Sound.play('chance');
         else if (e.type === 'iwakan') { Sound.play('iwakan'); Sound.hush(900); }
         else if (e.type === 'uwanose') { Sound.play('gekiha'); Sound.play('fanfare'); }
         else if (e.type === 'uwanoseEnd') Sound.play('lose');
         else if (e.type === 'bonusEnd') closeRashChoice();
-        else if (e.type === 'stStart' && e.entry) Sound.play('stIn');
+        else if (e.type === 'stStart' && e.entry) { Sound.play('stIn'); Records.add('entries'); }
+        else if (e.type === 'yutime') { Sound.play('stIn'); Records.add('yutimes'); }
         else if (e.type === 'stEnd') { Sound.play('fall'); settingHint(); }
         else if (e.type === 'jitanEnd') settingHint();
         else if (e.type === 'chainEnd') {
             game.record.bestChain = Math.max(game.record.bestChain, e.chain);
             game.record.bestBalls = Math.max(game.record.bestBalls, e.balls);
             store.set('record', game.record);
+            Records.best('bestChain', e.chain);
+            Records.best('bestBalls', e.balls);
             game.stats.launchedLeft = 0;
             game.stats.heso = 0;
         }
+    }
+
+    // 変動が はじまった ときの 記録・先告知・違和感の 音・レバブル
+    function spinFx(plan) {
+        if (plan.kind !== 'normal') return;
+        Records.add('spins');
+        if (plan.reach) Records.seen('reach', plan.reach);
+        if (plan.mini) {
+            Records.seen('mini', plan.mini.id);
+            if (plan.mini.id === 'goldDog' && plan.mini.win) Records.add('goldDogs');
+        }
+        if (plan.story !== undefined) Records.seen('stage', SHOW.stories[plan.story].id);
+        if (plan.fastStage) Records.seen('premium', 'fastStage');
+        if (plan.sango) Records.seen('premium', 'sango');
+        if (plan.gizi >= 3) Records.seen('premium', 'gizi4');
+        if (plan.step && plan.step.color === 'gold') Records.seen('premium', 'stepGold');
+        if (plan.zenkaiten) Records.seen('zenkaiten', plan.zenkaiten);
+        if (plan.iwakan) { Records.seen('iwakan', plan.iwakan); if (plan.iwakan === 'silent') Sound.hush(900); }
+        if (plan.pre) { flashClass($('push'), 'rainbow', 2500); Sound.play('chance'); }
+        if (plan.reach && plan.reach !== 'normal' && Customize.get('leverBuru') === 'on' && Math.random() < (plan.hit ? 0.3 : 0.02)) vibrate('lever');
     }
 
     // 変動の なかの 音 (時間で 鳴らす)
@@ -214,6 +276,7 @@
         let level = 1;
         for (const [k, v] of Object.entries(w)) if ((r -= v) < 0) { level = Number(k); break; }
         game.hints.push(level);
+        if (level === 6) Records.add('trophy6');
         Lcd.trophy(level);
     }
 
@@ -225,9 +288,10 @@
     // ボタン・レバーが 震える (2026-11-04 ユーザー指定: 動画を 参考に): モーターの ような 速い ぶるぶる (CSS の vibrate) と ヴヴヴヴ… (Sound の buzz)。
     // スマホは 本体も ふるわせる
     function vibrate(which) {
+        if (Customize.get('fx') === 'quiet') return;
         flashClass($(which), 'vibrate', 1300);
         Sound.play('buzz');
-        try { if (navigator.vibrate) navigator.vibrate([280, 40, 280, 40, 560]); } catch (e) { /* ふるえない 端末 */ }
+        try { if (navigator.vibrate && Customize.get('vibrate') === 'on') navigator.vibrate([280, 40, 280, 40, 560]); } catch (e) { /* ふるえない 端末 */ }
     }
     const flashTimers = new Map();
     function flashClass(el, cls, ms) {
@@ -342,7 +406,7 @@
             while (acc >= dt) { tick(dt); acc -= dt; }
             playCues();
             const m = game.machine;
-            const z = zoomTarget(m) * (store.get('zoom', true) ? 1 : 0);
+            const z = zoomTarget(m) * (Customize.get('lcdZoom') === 'on' && Customize.get('fx') !== 'quiet' ? 1 : 0);
             game.zoom += (z - game.zoom) * 0.12;
             if (game.zoom < 0.01) game.zoom = 0;
             Lcd.draw(m, time);
@@ -355,7 +419,7 @@
             }, time);
             if (typeof Bgm !== 'undefined' && Sound.context) {
                 Bgm.init(Sound.context);
-                Bgm.setPaused(Sound.muted || !store.get('bgm', true));
+                Bgm.setPaused(Sound.muted || Customize.get('bgm') !== 'on');
                 Bgm.play(Bgm.trackFor(m));
             }
             updateStatus();
@@ -373,7 +437,8 @@
     $('strength-slider').addEventListener('input', e => setStrength(Number(e.target.value)));
     $('left-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.left));
     $('right-button').addEventListener('click', () => setStrength(CONFIG.launch.presets.right));
-    $('push').addEventListener('pointerdown', e => { e.preventDefault(); push(); });
+    $('push').addEventListener('pointerdown', e => { e.preventDefault(); push(); game.pushAt = time; });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('push').addEventListener(t, () => { game.pushAt = null; }));
     Cabinet.place($('push'), { x: Cabinet.CAB.push.x - Cabinet.CAB.push.r, y: Cabinet.CAB.push.y - Cabinet.CAB.push.r, w: Cabinet.CAB.push.r * 2, h: Cabinet.CAB.push.r * 2 });
     Cabinet.setupLever($('lever'), lever);
     $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; });
@@ -392,21 +457,56 @@
         $('data-body').innerHTML = `<p>この台: 初当たり ${s.firstHits} 回・ST 突入 ${s.stEntries} 回・ST の 撃破 ${s.stHits} 回・転落 ${s.falls} 回・最高 ${s.bestChain} 連</p>`
             + `<p>設定: ${game.settingKnown ? `設定${game.setting}` : '？ (おまかせ)'}・回転率 ${rate} (1000円あたり)<br>トロフィー: ${seen}<br>`
             + `<small>白 = どの 設定でも・青 = 2 以上・緑 = 3 以上・紫 = 4 以上・赤 = 5 以上・虹 = 6 確定</small></p>`
-            + `<p>これまで: 初当たり ${r.firstHits} 回・最高 ${r.bestChain} 連・最高 ${r.bestBalls} 個</p>`;
+            + `<p>これまで: 初当たり ${r.firstHits} 回・最高 ${r.bestChain} 連・最高 ${r.bestBalls} 個</p>`
+            + `<p>当たりの 履歴 (新しい 順):<br>${game.history.map(h => `${h.kind} ${h.rounds * 150}発${h.kind === '初当たり' || h.kind === 'チャージ' ? ` (${h.spins} 回転)` : ` (${h.chain}連)`}`).join('<br>') || 'まだ なし'}</p>`;
         $('data-panel').hidden = false;
     });
-    document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => { b.closest('.picker').hidden = true; }));
+    document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
+        b.closest('.picker').hidden = true;
+        if (game.machine && $('picker').hidden) game.paused = false;
+    }));
+    // カスタマイズの 窓 (ひらいている あいだは 台を 止める)
+    function renderCustomize() {
+        const groups = {};
+        Object.entries(Customize.OPTIONS).forEach(([k, o]) => { (groups[o.group] = groups[o.group] || []).push([k, o]); });
+        $('customize-body').innerHTML = Object.entries(groups).map(([g, list]) => `<h3>${g}</h3>` + list.map(([k, o]) => `<div class="cz-row"><span class="cz-label">${o.label}</span><div class="cz-choices">${Object.entries(o.choices).map(([v, name]) => `<button data-cz="${k}" data-value="${v}" class="${Customize.get(k) === v ? 'selected' : ''}">${name}</button>`).join('')}</div>${o.note ? `<small>${o.note}</small>` : ''}</div>`).join('')).join('');
+    }
+    $('customize-body').addEventListener('click', e => {
+        const b = e.target.closest('[data-cz]');
+        if (!b) return;
+        Customize.set(b.dataset.cz, b.dataset.value);
+        renderCustomize();
+    });
+    $('customize-button').addEventListener('click', () => { Sound.unlock(); game.paused = true; renderCustomize(); $('customize-panel').hidden = false; });
+    // 図鑑・実績
+    $('collection-button').addEventListener('click', () => {
+        game.paused = true;
+        const list = Records.achievements();
+        $('collection-body').innerHTML = `<h3>実績 ${list.filter(a => a.done).length} / ${list.length}</h3>`
+            + list.map(a => `<p class="col-item ${a.done ? 'done' : ''}">${a.done ? '★' : '☆'} ${a.name}<small>${a.desc}</small></p>`).join('')
+            + Records.groups().map(g => `<h3>${g.title} ${g.items.filter(i => i.count).length} / ${g.items.length}</h3>` + g.items.map(i => `<p class="col-item ${i.count ? 'done' : ''}">${i.count ? `${i.name} (${i.count} 回)` : '？？？'}</p>`).join('')).join('');
+        $('collection-panel').hidden = false;
+    });
+    // 実績の お知らせ
+    Records.onUnlock(a => {
+        const t = $('toast');
+        t.textContent = `実績 解除: ${a.name}`;
+        t.hidden = false;
+        clearTimeout(t.timer);
+        t.timer = setTimeout(() => { t.hidden = true; }, 3200);
+    });
     document.addEventListener('keydown', e => {
         if (e.target.tagName === 'INPUT') return;
         Sound.unlock();
         if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) setFire(!game.fireOn); }
         else if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
         else if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
-        else if (e.code === 'KeyB' || e.code === 'Enter') push();
+        else if (e.code === 'KeyB' || e.code === 'Enter') { if (!e.repeat) { push(); game.pushAt = time; } }
         else if (e.code === 'Digit1') chooseRash('onioni');
         else if (e.code === 'Digit2') chooseRash('hashira');
         else if (e.code === 'KeyL') { Cabinet.setupLever && document.getElementById('lever').dispatchEvent(new Event('keypull')); }
     });
+    document.addEventListener('keyup', e => { if (e.code === 'KeyB' || e.code === 'Enter') game.pushAt = null; });
     $('lever').addEventListener('keypull', () => { const el = $('lever'); el.classList.add('pulled'); el.style.setProperty('--lever-angle', '-42deg'); setTimeout(() => { el.style.setProperty('--lever-angle', '0deg'); el.classList.remove('pulled'); }, 260); lever(); });
 
     // 台えらび (設定を えらんでから 台を 押す)
@@ -427,6 +527,16 @@
         startMachine(b.dataset.spec, random ? 1 + Math.floor(Math.random() * 6) : chosenSetting, !random);
     }));
 
+    // 前回の つづき
+    const savedGame = store.get('save', null);
+    $('continue-button').hidden = !savedGame;
+    $('continue-button').addEventListener('click', () => {
+        Sound.unlock();
+        $('picker').hidden = true;
+        const s = store.get('save', null);
+        if (s) startMachine(s.specId, s.setting, s.known, s);
+    });
+
     // デバッグ (2026-11-04 ユーザー指定: 「デバッグ」の ボタンで いつでも ひらく。&debug=1 なら はじめから)
     {
         $('debug-panel').hidden = params.get('debug') !== '1';
@@ -438,11 +548,14 @@
         // えらんだ リーチ・ミニゲーム・文字の 色・疑似連で 次の 変動を つくる
         const staged = () => ({
             reach: $('debug-reach-kind').value || undefined, mini: $('debug-mini').value || undefined,
-            textColor: $('debug-text').value || undefined, gizi: $('debug-gizi').value === '' ? undefined : Number($('debug-gizi').value)
+            step: $('debug-step').value || undefined, textColor: $('debug-text').value || undefined, gizi: $('debug-gizi').value === '' ? undefined : Number($('debug-gizi').value)
         });
         $('debug-show-hit').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', ...staged() }));
         $('debug-show-miss').addEventListener('click', () => Machine.debugHold(game.machine, 'reach', staged()));
         $('debug-mini-fail').addEventListener('click', () => Machine.debugHold(game.machine, 'miss', { ...staged(), mini: $('debug-mini').value || 'okamou', miniWin: false, reach: undefined }));
+        $('debug-sango').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', sango: true }));
+        $('debug-stage').addEventListener('change', e => { if (e.target.value !== '') Machine.debugStory(game.machine, Number(e.target.value)); });
+        $('debug-yutime').addEventListener('click', () => { if (game.machine.spec.yutime) game.machine.normalSpins = game.machine.spec.yutime.at; });
         $('debug-charge').addEventListener('click', () => Machine.debugHold(game.machine, 'charge', { next: 'normal' }));
         $('debug-charge-st').addEventListener('click', () => Machine.debugHold(game.machine, 'charge', { next: 'st' }));
         $('debug-hit').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', enemy: enemy() }));
@@ -455,7 +568,7 @@
         $('debug-hst').addEventListener('click', () => Machine.debugMode(game.machine, 'hst'));
         $('debug-hbattle').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { battle: true, shuketsu: true, ally: 'onioni' }));
         $('debug-auto').addEventListener('click', () => { game.auto = !game.auto; });
-        ['pillars', 'doors', 'kanabo'].forEach(k => $('debug-gim-' + k).addEventListener('click', () => Lcd.startGimmick(k, 3)));
+        ['pillars', 'doors', 'kanabo'].forEach(k => $('debug-gim-' + k).addEventListener('click', () => Lcd.startGimmick(k, 3, true)));
     }
 
     setStrength(game.strength);

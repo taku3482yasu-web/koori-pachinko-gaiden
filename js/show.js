@@ -7,7 +7,10 @@
 //
 // 通常時 (ストーリー 2026-11-03 ユーザー指定): こおりくんが 行方不明 → おにおにが さがす → 柱の氷の うわさ →
 //   ライバル探検隊と 合流 → 柱の氷 (ハルゥ・オカディシ・カネーズ) と たたかう
-//   変動の 流れ (2026-11-04 ユーザー指定): セリフ → 疑似連 (NEXT) → 群 → ミニゲーム → 失敗なら はずれ / 成功なら リーチ → SPリーチ → 撃破で 当たり
+//   背景 (2026-11-04 ユーザー指定): 雪が降る街・ゲームセンター・SE城・森。満月は 90% 以上、柱の神殿は 当たり確定 (保留に 当たりが ある ときに 出る)。
+//     背景が かわって 5 回転 以内に また かわれば 当たり濃厚 (stepStory)
+//   1・3・5 そろい (2026-11-04 ユーザー指定): 当たり確定で RASH へ。先読みも 予告も 出ない (result.sango)
+//   変動の 流れ (2026-11-04 ユーザー指定): セリフ → ステップアップ予告 → 疑似連 (NEXT) → 群 → ミニゲーム → 失敗なら はずれ / 成功なら リーチ → SPリーチ → 撃破で 当たり
 //   リーチ: ノーマル → 探検隊リーチ → SPリーチ (ハリージェネラル < アサタナ < ハルゥ < オカディシ < カネーズ) → 柱の氷リーチ (3 人 同時。80% 以上)
 //   ミニゲーム (成功度の 低い 順): おかもぅダッシュ < イシイー遺跡チャレンジ < マッスルチャレンジ < ASAHARA宣言 < ゴールド金面犬発見チャレンジ (発見で 95% 当たり)
 //   チャンスアップ: 保留の 色・セリフの 色・疑似連・カットインの 色・敵の カットインの 文字の 色 (白 < 赤 < 金。金は 80% 以上)・群 (ふぶき)・PUSH ボタン・金棒レバー・役物
@@ -85,6 +88,35 @@ const SHOW = {
     miniShare: 0.7,                      // 当たりの SPリーチの うち ミニゲームを とおる 割合
     miniHigh: ['kanezu', 'hashiraAll'],
     // 疑似連 (前作と おなじ。NEXT で 図柄が 回り直す 回数の 重み)。ミニゲームか SPリーチに 入る 変動だけ
+    // 1・3・5 そろい: ST へ 行く 通常時の 当たりの うち この 割合。はずれは 1・3・5 に ならない
+    sango: 0.08,
+    // 背景: 満月の rel は 90% 以上 (rates が はずれの 割合を 計算する)。hitAhead は 保留に 当たりが ある 1 回転ごとの 出やすさ
+    stage: { moon: { hitAhead: 0.1, hit: 0.2, rel: 0.93 }, temple: { hitAhead: 0.05 }, change: 0.35, fast: 0.7, fastMiss: 0.0002 },
+    // ステップアップ予告 (前作から。3 段目の 文字が 赤なら チャンス・金なら 約 90%)。hit: 当たりの ときの 割合 / rel: 出たら 当たる 割合
+    stepUp: {
+        time: 1.1, tail: 0.5,
+        outcomes: {
+            s1: { step: 1, color: 'white', hit: 0.08, rel: 0.03 }, s2: { step: 2, color: 'white', hit: 0.12, rel: 0.08 },
+            s3: { step: 3, color: 'white', hit: 0.1, rel: 0.25 }, s3red: { step: 3, color: 'red', hit: 0.12, rel: 0.55 },
+            s3gold: { step: 3, color: 'gold', hit: 0.08, rel: 0.9 }
+        },
+        kinds: [
+            { who: ['onioni', 'okagappa', 'harigeneral'], text: ['おにおにが さがしている…', 'ライバル探検隊が 手がかりを！', 'こおりくんは 近いぞ！'] },
+            { who: ['asatana', 'haru', 'kanezu'], text: ['柱の氷の けはい…', 'ふぶきが 強くなる…', 'カネーズが 見ている！'] },
+            { who: ['furukawa', 'tomoishi', 'koori'], text: ['こおりくんの うわさ…', '声が きこえる…', 'こおりくんが よんでいる！'] }
+        ]
+    },
+    // 違和感 (前作から。変動の はじめに なにかが おかしい。見た目だけなので Math.random で えらぶ)
+    iwakan: {
+        noise: { name: '液晶に ノイズ', hit: 0.04, rel: 0.7 }, silent: { name: '音が 消える', hit: 0.03, rel: 0.75 },
+        reverse: { name: '図柄が 逆に 回る', hit: 0.03, rel: 0.8 }, stop: { name: '図柄が 一瞬 止まる', hit: 0.03, rel: 0.8 },
+        lamp: { name: '画面が チカチカ', hit: 0.02, rel: 0.85 }
+    },
+    // 全回転 (前作から 5 種類)。figure: そろう 図柄 (奇数は ST へ 行く 当たり・偶数は それ以外)
+    zenkaiten: {
+        koori: { name: 'こおりくん', figure: 1 }, onioni: { name: 'おにおに', figure: 7 }, hibiki: { name: 'ひびきまくり', figure: 5 },
+        okagappa: { name: 'おかがっぱ', figure: 4 }, hyougaryu: { name: 'ヒョウガリュウ', figure: 8 }
+    },
     gizi: { hit: { 0: 35, 1: 25, 2: 22, 3: 18 }, reach: { 0: 65, 1: 22, 2: 10, 3: 3 }, fail: { 0: 85, 1: 12, 2: 3, 3: 0 } },
     // セリフ (通常時の 変動の はじめに ふるカワが しゃべる。前作と おなじ 考え方)。熱さ 0〜6 で 出やすさと 色が かわる
     //   熱さ: はずれ 0 / ミニゲーム失敗 1 / ノーマルリーチ 2 / SPリーチ はずれ 3 / 当たり 5 / 虹保留 6
@@ -111,10 +143,12 @@ const SHOW = {
     },
     // ストーリーの 場面 (通常時の 背景)
     stories: [
-        { id: 'town', name: 'こおりくんが いない…', bg: 'town' },
-        { id: 'rumor', name: '柱の氷の うわさ', bg: 'tavern' },
-        { id: 'rival', name: 'ライバル探検隊と 合流', bg: 'snowfield' },
-        { id: 'hideout', name: '柱の氷の アジト', bg: 'hideout' }
+        { id: 'town', name: '雪が降る街', bg: 'town' },
+        { id: 'arcade', name: 'ゲームセンター', bg: 'arcade' },
+        { id: 'castle', name: 'SE城', bg: 'castle' },
+        { id: 'forest', name: '森', bg: 'forest' },
+        { id: 'moon', name: '満月', bg: 'moon' },
+        { id: 'temple', name: '柱の神殿', bg: 'temple' }
     ],
     hashira: {
         // 先バレ [当たり, はずれ] (2026-11-04 ユーザー指定で 2 種類): voice = 前作の 音を 低く した もの / roar = おにおにの 先咆哮 (こっちが アツい)。
@@ -133,7 +167,7 @@ const SHOW = {
     plainByHolds: [5.2, 4, 2.4, 1.4],
     missReachByHolds: [1, 1, 0.6, 0.35],
     // next: 疑似連 1 回 / gun: 群 / mini: ミニゲーム / miniFail: 失敗の あと 図柄が 止まるまで / charge: チャージの 変動 / sp: SPリーチごと
-    time: { next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
+    time: { sango: 9, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
         normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
 };
 
@@ -173,14 +207,17 @@ const Show = (() => {
         const battleMiss = sum(SHOW.battleReaches.map(r => reachMiss[r])), battleHit = sum(SHOW.battleReaches.map(r => R[r].hit));
         const text = {};
         for (const [c, v] of Object.entries(SHOW.textColors)) text[c] = battleHit * v.hit * odds * (1 - v.rel) / v.rel / battleMiss;
-        const out = { reachMiss, mini, text };
+        const fromRel = v => v.hit * odds * (1 - v.rel) / v.rel;
+        const step = Object.fromEntries(Object.entries(SHOW.stepUp.outcomes).map(([k, v]) => [k, fromRel(v)]));
+        const iwakan = Object.fromEntries(Object.entries(SHOW.iwakan).map(([k, v]) => [k, fromRel(v)]));
+        const out = { reachMiss, mini, text, step, iwakan, moon: fromRel(SHOW.stage.moon) };
         rateCache.set(m.specId, out);
         return out;
     }
     const pickText = (w, rng) => { const r = rng(); return r < w.gold ? 'gold' : r < w.gold + w.red ? 'red' : 'white'; };
-    function speech(heat, rng) {
+    function speech(heat, rng, mode) {
         const L = SHOW.lines;
-        if (rng() >= L.appear[heat]) return null;
+        if (mode === 'off' || rng() >= L.appear[heat] * (mode === 'often' ? 1.6 : 1)) return null;
         const c = Number(pick(L.colorWeights[heat], rng)), list = L.text[c];
         return { text: list[Math.floor(rng() * list.length)], color: L.colors[c] };
     }
@@ -194,13 +231,16 @@ const Show = (() => {
             return { holdColor: 'white', shownColor: 'white', senbare };
         }
         if (m.mode === 'st' || fig === 2) return { holdColor: 'white', shownColor: 'white' };
+        // 1・3・5 そろい: 先読みなし
+        if (isHit(result) && result.next === 'st' && m.mode === 'normal' && rng() < SHOW.sango) return { holdColor: 'white', shownColor: 'white', sango: true };
+        const senyomi = { none: 0, chance: 0.5, recommend: 1, hot: 1.6 }[m.fx.senyomi || 'recommend'];
         // 保留の 色: 当たりかで 出やすさが ちがう
         let color = 'white';
         const r = rng();
         let acc = 0;
         for (const [c, t] of Object.entries(SHOW.holdColors)) {
             if (c === 'white') continue;
-            acc += isHit(result) ? t.hit : t.miss;
+            acc += (isHit(result) ? t.hit : t.miss) * senyomi;
             if (r < acc) { color = c; break; }
         }
         if (result.force === 'reach' && color === 'white') color = 'blue';
@@ -235,6 +275,7 @@ const Show = (() => {
         }
         let a = d(), b = d(), c = d();
         if (a === c) c = c % 9 + 1;
+        if (a === 1 && b === 3 && c === 5) c = 7;   // 1・3・5 は 当たり確定なので はずれでは 出さない
         return [a, b, c];
     }
 
@@ -242,6 +283,15 @@ const Show = (() => {
         const hit = isHit(result);
         const T = SHOW.time, R = rates(m);
         const p = { kind: 'normal', hit, holdColor: result.holdColor, shownColor: result.shownColor };
+        if (result.sango) return { ...p, sango: true, hit: true, next: 'st', reach: null, figures: [1, 3, 5], duration: T.sango, stopAt: T.sangoStop };
+        // 告知の カスタマイズ: 後告知・一発告知は 演出なしで 当たりを 知らせる (デバッグで リーチを えらんだ ときは そのまま)
+        const notice = m.fx.notice;
+        if (hit && !result.forceReach && !result.forceMini && (notice === 'post' || notice === 'oneshot')) {
+            const figs = figures(result, true, rng);
+            if (notice === 'post') return { ...p, post: true, next: result.next, reach: null, figures: figs, fake: figures({ kind: 'miss' }, false, rng), duration: T.post, stopAt: T.postStop };
+            return { ...p, oneshot: true, next: result.next, reach: null, figures: figs, duration: T.oneshot, stopAt: T.oneshotStop };
+        }
+        p.pre = hit && notice === 'pre';
         if (result.kind === 'charge') return { ...p, charge: true, next: result.next, reach: null, figures: figures(result, false, rng), duration: T.charge };
         const holdsK = SHOW.missReachByHolds[Math.min(3, ctx.holdsLeft || 0)];
         // リーチの 種類
@@ -283,10 +333,39 @@ const Show = (() => {
                 if (r < acc) { mini = { id, win: false }; break; }
             }
         }
+        // ステップアップ予告
+        let step = result.forceStep || null;
+        if (!step && reach !== 'zenkaiten') {
+            const r = rng();
+            let acc = 0;
+            for (const [k, v] of Object.entries(SHOW.stepUp.outcomes)) {
+                acc += hit ? v.hit : R.step[k] * holdsK;
+                if (r < acc) { step = k; break; }
+            }
+        }
+        if (step) {
+            const o = SHOW.stepUp.outcomes[step];
+            p.step = { id: step, step: o.step, color: o.color, kind: Math.floor(rng() * SHOW.stepUp.kinds.length) };
+            if (o.step === 3 && !reach) { reach = 'tanken'; mini = null; }   // 3 段目まで 行ったら リーチには なる
+        }
         p.reach = reach;
         p.mini = mini;
         p.figures = figures(result, Boolean(reach), rng);
-        if (reach === 'zenkaiten') p.figures = [7, 7, 7];
+        if (reach === 'zenkaiten' && hit) {
+            const list = Object.entries(SHOW.zenkaiten).filter(([, v]) => (v.figure % 2 === 1) === (result.next === 'st'));
+            const [id, v] = list[Math.floor(rng() * list.length)];
+            p.zenkaiten = id;
+            p.figures = [v.figure, v.figure, v.figure];
+        }
+        // 違和感 (見た目だけ)
+        {
+            const r = Math.random();
+            let acc = 0;
+            for (const [k, v] of Object.entries(SHOW.iwakan)) {
+                acc += hit ? v.hit : R.iwakan[k];
+                if (r < acc) { p.iwakan = k; break; }
+            }
+        }
         // 演出の 部品
         const P = SHOW.parts;
         const roll = (o) => rng() < (hit ? o.hit : o.miss);
@@ -321,10 +400,11 @@ const Show = (() => {
         if (result.forceGizi !== undefined) p.gizi = result.forceGizi;
         // セリフ
         const heat = result.holdColor === 'rainbow' ? 6 : hit ? 5 : big ? 3 : reach ? 2 : mini ? 1 : 0;
-        p.line = speech(heat, rng);
+        p.line = speech(heat, rng, m.fx.line);
         // 当たりの ときの 告知: 役物が 落ちる (yaku) か、決め手の あとに 当たり
         // 図柄が 止まりはじめる 前の 時間 (lead): 疑似連 → 群 → ミニゲーム。t はそれぞれの はじまる 秒
-        p.t = { gizi: 0.6 };
+        const stepT = p.step ? p.step.step * SHOW.stepUp.time + SHOW.stepUp.tail : 0;
+        p.t = { step: 0.4, gizi: 0.6 + stepT };
         p.t.gun = p.t.gizi + p.gizi * T.next;
         p.t.mini = p.t.gun + (p.gun ? T.gun : 0);
         p.lead = p.t.mini + (mini ? T.mini : 0) - 0.6;
@@ -400,10 +480,24 @@ const Show = (() => {
     }
 
     // ----- ストーリー -----
-    // はずれの 変動で ときどき 次の 場面へ (さいごの アジトの あとは はじめに もどる)。かわらなければ null
+    // 背景を かえるか きめる。かわらなければ null
+    //   はずれは 背景が かわって 5 回転の あいだは ほとんど かわらない → 5 回転 以内に また かわれば 当たり濃厚。
+    //   満月・柱の神殿は 保留に 当たりが ある ときに 出る (満月は ごくまれに はずれでも)。1・3・5 は 先読みなしなので 数えない
     function stepStory(config, m, result, rng) {
-        if (rng() < 1 / SHOW.storyEvery) return (m.story + 1) % SHOW.stories.length;
-        return null;
+        if (result.sango) return null;
+        const ahead = m.fx.senyomi !== 'none' && m.holds[1].some(h => isHit(h) && !h.sango);
+        const hitAhead = isHit(result) || ahead;
+        const S = SHOW.stage, nextStage = () => (m.story + 1) % 4;
+        if (m.story >= 4) return hitAhead ? null : Math.floor(rng() * 4);
+        if (hitAhead) {
+            const r = rng();
+            if (r < S.temple.hitAhead) return 5;
+            if (r < S.temple.hitAhead + S.moon.hitAhead) return 4;
+            return rng() < (m.storySpins <= 5 ? S.fast : S.change) ? nextStage() : null;
+        }
+        if (rng() < rates(m).moon) return 4;
+        if (m.storySpins <= 5) return rng() < S.fastMiss ? nextStage() : null;
+        return rng() < 1 / SHOW.storyEvery ? nextStage() : null;
     }
 
     // ST の 相手の、出たときの 撃破率 (表示・テスト用)

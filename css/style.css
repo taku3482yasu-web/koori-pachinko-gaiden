@@ -185,3 +185,20 @@ button:hover { border-color: var(--accent); }
     .handle-center { inset: 26px; font-size: 14px; }
     .hint { display: none; }
 }
+
+/* カスタマイズ・図鑑 */
+#customize-body h3, #collection-body h3 { margin: 14px 0 6px; color: var(--accent); font-size: 15px; }
+.cz-row { margin-bottom: 10px; }
+.cz-label { display: block; font-size: 13px; margin-bottom: 4px; }
+.cz-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+.cz-choices button { padding: 4px 10px; font-size: 13px; }
+.cz-choices button.selected { border-color: var(--gold); color: var(--gold); background: #2a2450; }
+.cz-row small, .col-item small { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.col-item { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.col-item.done { color: var(--text); }
+.continue-button { width: 100%; margin-bottom: 8px; border-color: var(--gold); }
+.continue-button[hidden] { display: none; }
+.toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; background: #1a1440; border: 2px solid var(--gold); color: var(--gold); border-radius: 8px; padding: 8px 14px; font-size: 14px; }
+.toast[hidden] { display: none; }
+.push.rainbow { animation: push-rainbow 0.5s linear infinite; }
+@keyframes push-rainbow { from { filter: hue-rotate(0deg) brightness(1.3); } to { filter: hue-rotate(360deg) brightness(1.3); } }
