@@ -56,8 +56,8 @@ const SHOW = {
         self: { hit: { white: 35, blue: 20, green: 20, red: 15, gold: 10 }, fall: { white: 80, blue: 10, green: 6, red: 3, gold: 1 } },
         foe: { hit: { purple: 55, red: 30, gold: 15 }, fall: { purple: 80, red: 20, gold: 0 } },
         selfMoves: { white: '金棒ふり', blue: '鬼火パンチ', green: '鬼鬼ラッシュ', red: '鬼鬼の金棒', gold: '鬼鬼の金棒・極' },
-        // 仲間の 合流: hit / fall はバトルの 回転で (リーチの 前に)、aheadHit / aheadFall は 保留に バトルが ある はずれの 回転で、miss は ふつうの はずれで
-        join: { hit: 0.25, fall: 0.08, aheadHit: 0.3, aheadFall: 0.1, miss: 0.004 },
+        // 仲間の 合流: hit / fall は 当たり・転落の 回転で (リーチの 前に。2026-11-04 ユーザー指定: 当たりの 回転でも 合流する)、aheadHit / aheadFall は 保留に バトルが ある はずれの 回転で、miss は ふつうの はずれで
+        join: { hit: 0.35, fall: 0.08, aheadHit: 0.3, aheadFall: 0.1, miss: 0.004 },
         team: { hit: 0.25, fall: 0.01 },     // 合流が チーム (3 人) に なる 割合
         allyMoves: { okagappa: 'おかピポっと光線', hibikimakuri: '大音響4DX', yamamou: 'おちょくりボーンフィーバー', sasaki: 'ASAスラッシュ', kotani: 'NABIテンポ', asahara: 'DOPAPANCHI', shibata: 'シバタードライバー', ikekimu: 'イケキムドライブ', ueno: 'マッスルウエノクラッシュ' },
         time: { reach: 1, reachHold: 1.4, join: 1.8, enemy: 2.4, ally: 2.4, team: 3.6, self: 1.8, foe: 1.8, clash: 1, action: 2.2, red: 1.4, revive: 3, end: 2 }
@@ -507,8 +507,8 @@ const Show = (() => {
         const looksWin = revive === 'none', pool = looksWin ? 'hit' : 'fall';
         // 仲間: すでに 合流している か、リーチの 前に 合流する
         let ally = m.stAlly, joinNow = false;
-        if (result.forceStAlly) { ally = pickAlly(looksWin, rng, result.forceStAlly); joinNow = true; }
-        else if (!ally && rng() < B.join[pool]) { ally = pickAlly(looksWin, rng); joinNow = true; }
+        if (result.forceStAlly) { ally = pickAlly(hit, rng, result.forceStAlly); joinNow = true; }
+        else if (!ally && rng() < B.join[hit ? 'hit' : 'fall']) { ally = pickAlly(hit, rng); joinNow = true; }
         m.stAlly = null;
         const self = result.forceSelf || pick(B.self[pool], rng);
         const foe = result.forceFoe || pick(B.foe[pool], rng);
@@ -518,10 +518,10 @@ const Show = (() => {
         const odd = [1, 3, 5, 7, 7, 7], n = odd[Math.floor(rng() * odd.length)];
         // 時間の ならび
         const t = {};
-        let c = BT.reach;
-        t.reach = c;
-        c += BT.reachHold;
-        if (joinNow) { t.join = c; c += BT.join; }
+        let c = 0.4;
+        if (joinNow) { t.join = c; c += BT.join; }   // 合流は リーチの 前
+        t.reach = c + BT.reach - 0.4;
+        c = t.reach + BT.reachHold;
         t.enemy = c; c += BT.enemy;
         if (ally) { t.ally = c; c += ally.team ? BT.team : BT.ally; }
         t.self = c; c += BT.self;
