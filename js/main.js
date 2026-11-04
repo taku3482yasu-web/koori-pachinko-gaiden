@@ -5,6 +5,7 @@
 // 電チュー・アタッカーの 開け閉めを 盤面に → 液晶・筐体・音。
 // 操作: 発射 (タップで 発射 / 停止・Space)・強さ (ゲージ・← →)・左打ち / 右打ち・台の ボタン PUSH (B)・金棒レバー (L・右横を 左へ 引く)
 // URL (確認用): ?spec=s319 (台えらびを とばす) &auto=1 (自動で 打つ。台に 合わせて 左右も) &skip=30 (はじめに 30 秒 早送り)
+//   &force=charge|chargeSt (チャージ) &reach=hashiraAll (リーチの 種類) &mini=goldDog &miniWin=0 (ミニゲームと 成否) &text=gold (敵の 文字の 色) &gizi=2 (疑似連)
 //   &pay=full|base|uwanose &uwanose=1|0 (1/399 の RASH の 出玉・上乗せの 成否) &setting=6 (設定。はぶくと 設定4) &senbare=voice|roar (柱の氷RASH の 先バレ) &balls=9999 &force=hit|st|jitan|reach|fall (はじめの 保留) &enemy=kanezu (ST の 相手) &debug=1 (デバッグの ボタン)
 // =====================================================================
 
@@ -48,6 +49,7 @@
         Cabinet.init($('cabinet-art'), BoardView.outline(game.board));
         Cabinet.place(canvas, Cabinet.CAB.board);
         $('spec-display').textContent = `${spec.label} ${spec.name}${settingKnown ? ` / 設定${setting}` : ''}`;
+        document.querySelectorAll('.lt-badge').forEach(b => { b.hidden = !spec.lt; });
         game.paused = false;
         game.record.plays++;
         store.set('record', game.record);
@@ -57,12 +59,15 @@
             reach: params.get('reach') || undefined, gun: params.has('gun') ? params.get('gun') === '1' : undefined,
             battle: params.get('battle') === '1', ally: params.get('ally') || undefined, attack: params.get('attack') || undefined,
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
-            pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined
+            pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
+            mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
+            gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined
         };
         if (force === 'st' || force === 'jitan' || force === 'hst') Machine.debugMode(game.machine, force);
         else if (force === 'stHit' || force === 'fall') { Machine.debugMode(game.machine, 'st'); Machine.debugHold(game.machine, force === 'fall' ? 'fall' : 'hit', opt); }
         else if (force === 'hstHit' || force === 'hstMiss') { Machine.debugMode(game.machine, 'hst'); Machine.debugHold(game.machine, force === 'hstHit' ? 'hit' : 'miss', opt); }
         else if (force === 'reach') Machine.debugHold(game.machine, 'reach', opt);
+        else if (force === 'charge' || force === 'chargeSt') Machine.debugHold(game.machine, 'charge', { next: force === 'chargeSt' ? 'st' : 'normal' });
         else if (force) Machine.debugHold(game.machine, 'hit', opt);
     }
 
@@ -120,9 +125,12 @@
         else if (e.type === 'spinStart') { Sound.play('stop'); schedule(e.plan, e.duration); }
         else if (e.type === 'spinEnd') { if (e.result.kind === 'hit') Sound.play('win'); }
         else if (e.type === 'bonusStart') {
-            Sound.play('fanfare');
-            if (e.next === 'st') openRashChoice();
-            if (e.from === 'normal') { game.record.firstHits++; game.chainStartBalls = game.balls; }
+            Sound.play(e.charge ? 'chance' : 'fanfare');
+            if (e.next === 'st' && !e.charge) openRashChoice();
+            if (e.from === 'normal' && !e.charge) { game.record.firstHits++; game.chainStartBalls = game.balls; }
+        } else if (e.type === 'ending') {
+            // チャージから ST: ここで はじめて 知らせる
+            if (e.charge && e.next === 'st') { Sound.play('fanfare'); openRashChoice(); }
         } else if (e.type === 'roundStart') Sound.play('round');
         else if (e.type === 'uwanoseStart') Sound.play('chance');
         else if (e.type === 'iwakan') { Sound.play('iwakan'); Sound.hush(900); }
@@ -147,12 +155,26 @@
         cues = [];
         const at = (t, name) => cues.push({ t: time + t, name });
         if (plan.kind === 'normal') {
-            const g = plan.gun ? 2.5 : 0;
-            if (plan.gun) at(0.6, 'gun');
+            const g = plan.lead || 0, t = plan.t || {};
+            for (let i = 0; i < (plan.gizi || 0); i++) at(t.gizi + i * SHOW.time.next, 'reach');
+            if (plan.gun) at(t.gun, 'gun');
+            if (plan.mini) {
+                at(t.mini, 'challenge');
+                at(t.mini + SHOW.time.mini - 1.4, plan.mini.win ? 'success' : 'fail');
+            }
             if (plan.reach) at(1.7 + g, 'reach');
-            if (plan.reach && plan.reach !== 'normal' && plan.reach !== 'zenkaiten') {
+            if (plan.reach === 'hashiraAll') {
                 const sceneStart = 1.7 + g + 0.9, len = D - 0.7 - sceneStart;
-                if (plan.cutin) at(sceneStart + 2 + (len - 2) * 0.35, 'cutin');
+                at(sceneStart + 5.8, 'roar');
+                at(sceneStart + 7.6, 'cutin');
+                for (let k = 9.6; k < len - 8; k += 0.5) at(sceneStart + k, 'clash');
+                at(sceneStart + len - 8, 'smash');
+                at(sceneStart + len - 1.6, plan.hit ? 'gekiha' : 'lose');
+            } else if (plan.reach && plan.reach !== 'normal' && plan.reach !== 'zenkaiten') {
+                const sceneStart = 1.7 + g + 0.9, len = D - 0.7 - sceneStart, body = len - 2;
+                if (plan.textColor) at(sceneStart, plan.textColor === 'white' ? 'cutin' : 'chance');
+                if (plan.cutin) at(sceneStart + 2 + body * 0.35, 'cutin');
+                if (plan.chance) at(sceneStart + 2 + body * 0.6, 'chance');
                 if (plan.enemy && plan.enemy !== 'rival') for (let k = 3; k < len - 3; k += 0.7) at(sceneStart + k, 'clash');
                 at(sceneStart + len - 1.6, plan.hit ? 'gekiha' : 'lose');
             }
@@ -258,9 +280,9 @@
         $('rate').textContent = shot > 50 ? (game.stats.heso / shot * 250).toFixed(1) : '-';
         $('chain').textContent = m.chain > 0 ? `${m.chain}連` : '-';
         let mode = '通常時';
-        if (m.bonus) mode = `大当たり ${m.bonus.round}/${m.bonus.rounds}R`;
-        else if (m.mode === 'st') mode = `おにおにRASH ${m.chain}連中`;
-        else if (m.mode === 'hst') mode = `柱の氷RASH ${m.chain}連中 のこり ${m.stLeft} 回`;
+        if (m.bonus) mode = `${m.bonus.charge ? 'チャージ' : '大当たり'} ${m.bonus.round}/${m.bonus.rounds}R`;
+        else if (m.mode === 'st') mode = `おにおにRASH${m.spec.lt ? ' LT' : ''} ${m.chain}連中`;
+        else if (m.mode === 'hst') mode = `柱の氷RASH${m.spec.lt ? ' LT' : ''} ${m.chain}連中 のこり ${m.stLeft} 回`;
         else if (m.mode === 'jitan' || m.mode === 'jitanLast') mode = `時短 のこり ${m.jitanLeft} 回`;
         $('mode-display').textContent = mode;
         $('mode-display').className = 'mode-display mode-' + (m.bonus ? 'bonus' : m.mode === 'st' ? 'st' : m.mode === 'normal' ? 'normal' : 'jitan');
@@ -273,9 +295,9 @@
             if (p === 'lever') vibrate('lever');
             lastPrompt = p;
         }
-        if (params.get('debug') === '1') {
+        if (!$('debug-panel').hidden) {
             const s = m.stats;
-            $('debug-stats').textContent = `初当たり ${s.firstHits} / ST突入 ${s.stEntries} / ST当たり ${s.stHits} / 転落 ${s.falls} / 時短 ${s.jitanEntries} (引き戻し ${s.jitanHits}) / 最高 ${s.bestChain}連 / 保留 ${m.holds[1].length}+${m.holds[2].length}`;
+            $('debug-stats').textContent = `初当たり ${s.firstHits} / チャージ ${s.charges} (ST ${s.chargeSt}) / ST突入 ${s.stEntries} / ST当たり ${s.stHits} / 転落 ${s.falls} / 時短 ${s.jitanEntries} (引き戻し ${s.jitanHits}) / 最高 ${s.bestChain}連 / 保留 ${m.holds[1].length}+${m.holds[2].length}`;
         }
     }
 
@@ -305,7 +327,7 @@
         const p = sp.plan;
         if (p.kind === 'battle' && sp.elapsed > 1 && sp.elapsed < sp.duration - 0.2) return 1;
         if (p.kind === 'hashira' && p.sub !== 'quick' && sp.elapsed > 0.8 && sp.elapsed < sp.duration - 0.2) return 1;
-        if (p.kind === 'normal' && p.reach && p.reach !== 'normal' && p.reach !== 'zenkaiten' && sp.elapsed > 3 + (p.gun ? 2.5 : 0)) return 1;
+        if (p.kind === 'normal' && p.reach && p.reach !== 'normal' && p.reach !== 'zenkaiten' && sp.elapsed > 3 + (p.lead || 0)) return 1;
         return 0;
     }
 
@@ -405,10 +427,24 @@
         startMachine(b.dataset.spec, random ? 1 + Math.floor(Math.random() * 6) : chosenSetting, !random);
     }));
 
-    // デバッグ
-    if (params.get('debug') === '1') {
-        $('debug-panel').hidden = false;
+    // デバッグ (2026-11-04 ユーザー指定: 「デバッグ」の ボタンで いつでも ひらく。&debug=1 なら はじめから)
+    {
+        $('debug-panel').hidden = params.get('debug') !== '1';
+        $('debug-button').addEventListener('click', () => {
+            $('debug-panel').hidden = !$('debug-panel').hidden;
+            if (!$('debug-panel').hidden) $('debug-panel').scrollIntoView({ block: 'nearest' });
+        });
         const enemy = () => $('debug-enemy').value || null;
+        // えらんだ リーチ・ミニゲーム・文字の 色・疑似連で 次の 変動を つくる
+        const staged = () => ({
+            reach: $('debug-reach-kind').value || undefined, mini: $('debug-mini').value || undefined,
+            textColor: $('debug-text').value || undefined, gizi: $('debug-gizi').value === '' ? undefined : Number($('debug-gizi').value)
+        });
+        $('debug-show-hit').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', ...staged() }));
+        $('debug-show-miss').addEventListener('click', () => Machine.debugHold(game.machine, 'reach', staged()));
+        $('debug-mini-fail').addEventListener('click', () => Machine.debugHold(game.machine, 'miss', { ...staged(), mini: $('debug-mini').value || 'okamou', miniWin: false, reach: undefined }));
+        $('debug-charge').addEventListener('click', () => Machine.debugHold(game.machine, 'charge', { next: 'normal' }));
+        $('debug-charge-st').addEventListener('click', () => Machine.debugHold(game.machine, 'charge', { next: 'st' }));
         $('debug-hit').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', enemy: enemy() }));
         $('debug-hit-jitan').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'jitan' }));
         $('debug-yaku').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', yaku: true }));

@@ -39,8 +39,8 @@
             <!-- RASH えらび: ST へ 行く 大当たりの あいだに (1 / 2 キーでも) -->
             <div id="rash-choice" class="rash-choice" hidden>
                 <p>どっちの RASH に する？</p>
-                <button data-rash="onioni"><span class="rc-name">おにおにRASH</span><span class="rc-note">転落型。おにおにが たおされるまで 何回でも</span></button>
-                <button data-rash="hashira"><span class="rc-name">柱の氷RASH</span><span class="rc-note">100回の ST。一発告知・先バレ・バトル</span></button>
+                <button data-rash="onioni"><span class="rc-name">おにおにRASH <b class="lt-badge" hidden>LT</b></span><span class="rc-note">転落型。おにおにが たおされるまで 何回でも</span></button>
+                <button data-rash="hashira"><span class="rc-name">柱の氷RASH <b class="lt-badge" hidden>LT</b></span><span class="rc-note">100回の ST。一発告知・先バレ・バトル</span></button>
             </div>
             <div class="status">
                 <div class="status-item"><span class="label">持ち玉</span><span id="balls" class="value">0</span></div>
@@ -65,11 +65,52 @@
             <div class="menu-row">
                 <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
                 <button id="data-button" class="small-button">データ</button>
+                <button id="debug-button" class="small-button">デバッグ</button>
                 <a href="howto.html" class="small-button link-button">遊び方</a>
             </div>
         </section>
 
         <section id="debug-panel" class="debug-panel" hidden>
+            <div class="debug-buttons">
+                <select id="debug-reach-kind" aria-label="リーチの 種類">
+                    <option value="">リーチ: 抽選</option>
+                    <option value="normal">ノーマル</option>
+                    <option value="tanken">探検隊</option>
+                    <option value="harigeneral">SP ハリージェネラル</option>
+                    <option value="asatana">SP アサタナ</option>
+                    <option value="haru">SP ハルゥ</option>
+                    <option value="okadishi">SP オカディシ</option>
+                    <option value="kanezu">SP カネーズ</option>
+                    <option value="hashiraAll">柱の氷リーチ</option>
+                    <option value="zenkaiten">全回転</option>
+                </select>
+                <select id="debug-mini" aria-label="ミニゲーム">
+                    <option value="">ミニゲーム: 抽選</option>
+                    <option value="okamou">おかもぅダッシュ</option>
+                    <option value="ishii">イシイー遺跡</option>
+                    <option value="muscle">マッスルチャレンジ</option>
+                    <option value="asahara">ASAHARA宣言</option>
+                    <option value="goldDog">ゴールド金面犬発見</option>
+                </select>
+                <select id="debug-text" aria-label="敵の 文字の 色">
+                    <option value="">文字: 抽選</option>
+                    <option value="white">白</option>
+                    <option value="red">赤</option>
+                    <option value="gold">金</option>
+                </select>
+                <select id="debug-gizi" aria-label="疑似連">
+                    <option value="">疑似連: 抽選</option>
+                    <option value="0">なし</option>
+                    <option value="1">疑似2連</option>
+                    <option value="2">疑似3連</option>
+                    <option value="3">疑似4連</option>
+                </select>
+                <button id="debug-show-hit">この 内容で 当たり</button>
+                <button id="debug-show-miss">この 内容で はずれ</button>
+                <button id="debug-mini-fail">ミニゲーム 失敗</button>
+                <button id="debug-charge">次は チャージ</button>
+                <button id="debug-charge-st">次は チャージ → ST</button>
+            </div>
             <div class="debug-buttons">
                 <button id="debug-hit">次は 大当たり (ST)</button>
                 <button id="debug-hit-jitan">次は 大当たり (時短)</button>
@@ -118,9 +159,9 @@
             <p class="picker-note setting-note">設定が 高いほど 釘が ひらいて よく 回る (設定1 は 負けやすく、設定6 は 大きく 勝てる)。おまかせは 設定が わからない (RASH・時短が 終わった ときの トロフィーの 色で 見やぶろう)</p>
             <div class="spec-options">
                 <button class="spec-option" data-spec="s319"><span class="spec-label">1/319 ライトスペック</span><span class="spec-note">大当たりは いつも 3R (約450個)。初当たりの 50% が ST、のこりは 時短100回 (あたれば ST)。ST 継続率 約80%</span></button>
-                <button class="spec-option" data-spec="s399"><span class="spec-label">1/399 ミドルスペック</span><span class="spec-note">初当たりは 3000発。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。初当たりの 80% が ST、20% が 時短100回。ST 継続率 約75%・出玉は こっちが 多め</span></button>
+                <button class="spec-option" data-spec="s399"><span class="spec-label">1/399 ミドルスペック</span><span class="spec-note">初当たりの 50% は 3000発で RASH (LT)、のこりは 1500発で 時短100回。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。ST 継続率 約75%・出玉は こっちが 多め</span></button>
             </div>
-            <p class="picker-note">ST は 2 つから えらべる (継続率は おなじ)。<br>おにおにRASH: 転落型。回数の かぎりは ないが、おにおにが たおされたら 終わり。撃破率は 相手で かわる (ハリージェネラル ＞ ヒョウガリュウ ＞ ハルゥ ＞ オカディシ ＞ カネーズ)<br>柱の氷RASH: 100回の ST。一発告知・先バレが 主役。バトルで おにおに・こおりくんが 出たら チャンス、柱の氷が 集結したら 大チャンス。一撃 (レバー) は 連撃 (ボタン連打) より 期待度が 高い</p>
+            <p class="picker-note">チャージ: 通常時に 低い 確率で 入る 300発。そのあいだは 右打ち。5% で ST へ。<br>ST は 2 つから えらべる (継続率は おなじ)。<br>おにおにRASH: 転落型。回数の かぎりは ないが、おにおにが たおされたら 終わり。撃破率は 相手で かわる (ハリージェネラル ＞ ヒョウガリュウ ＞ ハルゥ ＞ オカディシ ＞ カネーズ)<br>柱の氷RASH: 100回の ST。一発告知・先バレが 主役。バトルで おにおに・こおりくんが 出たら チャンス、柱の氷が 集結したら 大チャンス。一撃 (レバー) は 連撃 (ボタン連打) より 期待度が 高い</p>
         </div>
     </div>
 
