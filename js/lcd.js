@@ -1403,7 +1403,7 @@ const Lcd = (() => {
             drawNormalHint(now);
         }
         // 図柄 (上に 小さく)。まんなかは けっかまで 回る
-        if (el < t.result) reels(TOP, plan.figures, [el >= 0.6, false, el >= t.reach], now, { speed: 20 });
+        if (el < t.result) reels(TOP, plan.figures, [el >= t.reach - 0.4, false, el >= t.reach], now, { speed: 20 });
         holds(m, now);
     }
     const drawNormalHint = now => { if (Math.floor(now * 4) % 2) text('PUSH', W / 2, H - 12, 10, '#ffd84a', 'center', { bold: true }); };
