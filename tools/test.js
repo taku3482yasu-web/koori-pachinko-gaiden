@@ -437,6 +437,42 @@ for (const specId of Object.keys(CONFIG.specs)) {
     j.mode = 'jitan';
     check(!Show.hold(CONFIG, j, 2, { kind: 'miss' }, () => 0).senbare, '時短の 電チューでは 先バレなし');
 }
+// RASH の カスタマイズ
+{
+    const spec = CONFIG.specs.s399, rng = seeded(SEED + 11);
+    // 柱の氷モード: 3000発 以上の 当たりだけ 告知。出玉の 振り分けは かわらない
+    for (const mode of ['st', 'hst']) {
+        const m = Machine.create(CONFIG, 's399', rng);
+        m.mode = mode; m.stLeft = 100; m.fx = { rashMode: 'hashira' };
+        let n = 0, big = 0, shown = 0, wrong = 0;
+        for (let i = 0; i < 100000; i++) {
+            const result = { kind: 'hit', mode };
+            const p = Show.plan(CONFIG, m, { fig: 2, result, holdsLeft: 0 }, rng);
+            const k = spec.payout.rash.find(x => x.id === result.forcePay);
+            const isBig = k.rounds >= 20 || (k.uwanose && result.forceUwanose);
+            const notice = Boolean(p.shuketsuNotice);
+            n++; if (isBig) big++; if (notice) shown++;
+            if (notice !== Boolean(isBig)) wrong++;
+            if (notice && p.revive === 'win') wrong++;
+        }
+        check(wrong === 0 && near(big / n, 0.5, 0.01), `柱の氷モード (${mode}): 3000発 以上だけ 告知 (${pct(shown / n)}。目標 50%)`);
+        const miss = Show.plan(CONFIG, m, { fig: 2, result: { kind: 'miss', mode }, holdsLeft: 0 }, rng);
+        check(!miss.shuketsuNotice, `柱の氷モード (${mode}): はずれでは 告知なし`);
+    }
+    const light = Machine.create(CONFIG, 's319', rng);
+    light.mode = 'st'; light.fx = { rashMode: 'hashira' };
+    check(!Show.plan(CONFIG, light, { fig: 2, result: { kind: 'hit', mode: 'st' }, holdsLeft: 0 }, rng).shuketsuNotice, '1/319 では 告知なし');
+    // こおりくんモード: 先読みの 期待度が 上がる
+    const trust = rashMode => {
+        const m = Machine.create(CONFIG, 's399', rng);
+        m.mode = 'hst'; m.fx = { rashMode };
+        let h = 0, f = 0;
+        for (let i = 0; i < 200000; i++) { if (Show.hold(CONFIG, m, 2, { kind: 'hit' }, rng).senbare) h++; if (Show.hold(CONFIG, m, 2, { kind: 'miss' }, rng).senbare) f++; }
+        return (h / 73) / (h / 73 + f * 72 / 73);
+    };
+    const a = trust('onioni'), b = trust('koori');
+    check(b > a + 0.1, `こおりくんモードの 先バレ ${pct(b)} > おにおにモード ${pct(a)}`);
+}
 // 敵の 文字の 色 (ST・柱の氷RASH): 金は 80% 以上
 for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
     const w = SHOW.battleText, g = w.hit.gold * chance, b = w[mode].gold * (1 - chance);

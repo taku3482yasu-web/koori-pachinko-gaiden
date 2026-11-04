@@ -238,3 +238,4 @@ button:hover { border-color: var(--accent); }
 /* 先バレの ボタンの 色 (ふだんは 赤) */
 .push.purple { background: radial-gradient(circle at 35% 30%, #e8c8ff, #a040f0 55%, #4a1090) !important; box-shadow: 0 0 18px 6px rgba(170, 80, 255, 0.85) !important; }
 .push.gold { background: radial-gradient(circle at 35% 30%, #fff6c0, #ffc820 55%, #a06a00) !important; box-shadow: 0 0 22px 8px rgba(255, 216, 74, 0.95) !important; }
+.cz-choices button:disabled { opacity: 0.35; }
