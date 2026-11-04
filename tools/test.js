@@ -294,6 +294,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const c = { hit: {}, miss: {} };
     const add = (h, k) => { c[h][k] = (c[h][k] || 0) + 1; };
     const N = { hit: 300000, miss: 3000000 };
+    let bad7 = 0, hit7 = 0;
     for (const h of ['hit', 'miss']) for (let i = 0; i < N[h]; i++) {
         const result = { kind: h, mode: 'normal', next: 'st' };
         Object.assign(result, Show.hold(CONFIG, m, 1, result, rng));
@@ -302,6 +303,8 @@ for (const specId of Object.keys(CONFIG.specs)) {
         if (result.btn) add(h, 'btn:' + result.btn);
         const q = Show.plan(CONFIG, m, { fig: 1, result, holdsLeft: i % 3 }, rng);
         if (q.figures.join() === '1,3,5') check(false, 'はずれは 1・3・5 に ならない');
+        if (h === 'miss' && q.reach && q.figures[0] === 7) bad7++;
+        if (h === 'hit' && q.reach && q.figures[0] === 7) hit7++;
         if (q.step) add(h, 'step:' + q.step.id);
         if (q.iwakan) add(h, 'iwakan');
         if (q.reach) add(h, 'reach:' + q.reach);
@@ -313,6 +316,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
         if (q.mini && !q.mini.win && q.reach) check(false, 'ミニゲームの 失敗は リーチに ならない');
         if (q.reach && q.figures[0] !== q.figures[2]) check(false, 'リーチは 左と 右が おなじ');
     }
+    check(bad7 === 0 && hit7 > 0, `${label}: 7 の リーチは 当たり確定 (当たり ${hit7}・はずれ ${bad7})`);
     const mass = (h, k) => (c[h][k] || 0) / N[h] * (h === 'hit' ? p : 1 - p);
     const trust = k => mass('hit', k) / (mass('hit', k) + mass('miss', k));
     let prev = 0;
@@ -406,7 +410,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
         add(h + 'self:' + (p.self === 'white' ? 'white' : 'color'));
         add(h + 'foe:' + p.foe);
         if (p.ally) { add(h + (p.ally.team ? 'team' : 'one')); if (p.ally.team && p.ally.members.length !== 3) bad++; }
-        if (hit ? p.figures[1] !== p.figures[0] : p.figures[1] !== 'END' || p.figures[0] !== p.figures[2]) bad++;
+        if (hit ? p.figures[1] !== p.figures[0] : p.figures[1] !== 'END' || p.figures[0] !== p.figures[2] || p.figures[0] === 7) bad++;
         if (p.revive === 'win' && p.foe === 'gold') bad++;
         if (!(p.t.reach < p.t.enemy && p.t.enemy < p.t.self && p.t.self < p.t.foe && p.t.foe < p.t.clash && p.t.clash < p.t.action && p.t.action < p.t.result && p.t.result <= p.t.end && p.t.end < p.duration)) bad++;
     }
@@ -467,6 +471,17 @@ for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
     check(trust('ichigeki') > trust('rengeki'), `一撃 ${pct(trust('ichigeki'))} は 連撃 ${pct(trust('rengeki'))} より 期待度が 高い`);
     check(trust('shuketsu') > 0.6, `柱の氷 集結 ${pct(trust('shuketsu'))} は 大チャンス`);
     check(trust('allyChance') > trust('battle'), `おにおに・こおりくん 参戦 ${pct(trust('allyChance'))} は チャンス (バトル全体 ${pct(trust('battle'))})`);
+}
+// 時短の はずれの リーチも 7 では 出ない
+{
+    const rng = seeded(SEED + 10), m = Machine.create(CONFIG, 's319', rng);
+    m.mode = 'jitan';
+    let bad = 0, reach = 0;
+    for (let i = 0; i < 100000; i++) {
+        const p = Show.plan(CONFIG, m, { fig: 2, result: { kind: 'miss' }, holdsLeft: 0 }, rng);
+        if (p.reach) { reach++; if (p.figures[0] === 7) bad++; }
+    }
+    check(reach > 0 && bad === 0, `時短の はずれの リーチは 7 に ならない (${reach} 回)`);
 }
 // 時短 100 回で 当たらなければ 通常時へ
 {
