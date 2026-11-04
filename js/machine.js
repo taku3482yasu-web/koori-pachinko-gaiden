@@ -11,6 +11,8 @@
 //   昇格チャレンジ (2026-11-04 ユーザー指定): 通常時の ヘソの 偶数図柄の 当たりの あと (result.promo)。結果は 当たりの ときに きまっている (result.next === 'st' なら 成功)。
 //     1 ラウンド目から ラウンド中に 液晶で おこなう (アタッカーは 開いたまま。ラウンドの あとだと 1/399 は 出玉で 結果が わかるため)。
 //     成功なら RASH へ (1/399 は 1500発 → 3000発に 昇格して ラウンドが ふえる)。ラウンドが 先に おわったら チャレンジの おわりを 待つ (phase 'promoWait')
+//   ラウンドの スキップ (2026-11-04 ユーザー指定。Machine.skipBonus): のこりの 出玉を すぐ もらう。昇格チャレンジの ある 当たりは 結果が わかってから。
+//     上乗せの ある 当たりは スキップの あとに 上乗せタイム (phase 'uwanoseWait')。判定も そのとき
 //   チャージ (2026-11-04 ユーザー指定。spec.charge): 通常時の ヘソの 低確率の 当たり (result.kind 'charge')。300発 (2R) を 右打ちで。spec.charge.st (5%) で ST、のこりは 通常時へ (回転数・連チャンは そのまま)
 //   ST は 2 つ (2026-11-04 ユーザー指定)。ST に 入る 大当たりの あいだに えらぶ (m.rashType。Machine.setRashType):
 //     おにおにRASH ('onioni'。mode 'st'): 上の 転落型
@@ -321,6 +323,13 @@ const Machine = (() => {
         b.timer -= dt;
         updateUwanose(m, dt);
         updatePromo(m, dt, cfg);
+        if (b.phase === 'uwanoseWait') {
+            // スキップの あとの 上乗せタイムの おわりを 待つ
+            if (b.uwanose.phase !== 'done') return;
+            if (b.round < b.rounds) { b.phase = 'interval'; b.timer = cfg.interval; }
+            else toEnding(m, b, cfg);
+            return;
+        }
         if (b.phase === 'open') {
             if (b.count < cfg.count && b.timer > 0) return;
             emit(m, 'roundEnd', { round: b.round, count: b.count });
@@ -374,6 +383,32 @@ const Machine = (() => {
             }
             emit(m, 'bonusEnd', { next: b.next });
         }
+    }
+
+    // ----- ラウンドの スキップ -----
+    function canSkip(m) {
+        const b = m.bonus;
+        if (!b || !['opening', 'open', 'interval'].includes(b.phase)) return false;
+        return !b.promo || b.promo.state === 'done';
+    }
+    // のこりの ラウンドの 出玉を 返す (0 は スキップできない とき)。main が 持ち玉に 足す
+    function skipBonus(m) {
+        if (!canSkip(m)) return 0;
+        const b = m.bonus, cfg = m.config.machine.bonus, per = m.config.payout.attacker;
+        const inRound = b.phase === 'open' ? cfg.count - b.count : 0;
+        const left = ((b.rounds - b.round) * cfg.count + inRound) * per;
+        b.round = b.rounds;
+        b.count = cfg.count;
+        emit(m, 'bonusSkip', { balls: left });
+        const u = b.uwanose;
+        if (u && u.phase !== 'done') {
+            if (u.phase === 'wait') {
+                u.phase = 'time';
+                emit(m, 'uwanoseStart', { window: m.spec.uwanose.window });
+            }
+            b.phase = 'uwanoseWait';
+        } else toEnding(m, b, cfg);
+        return left;
     }
 
     // ----- 普図 (ゲート → 電チュー) -----
@@ -491,6 +526,6 @@ const Machine = (() => {
         emit(m, 'storyChange', { story });
     }
 
-    return { debugStory, create, enter, update, aim, support, setRashType, snapshot, restore, debugHold, debugMode, weightedPick };
+    return { canSkip, skipBonus, debugStory, create, enter, update, aim, support, setRashType, snapshot, restore, debugHold, debugMode, weightedPick };
 })();
 if (typeof module !== 'undefined') module.exports = { Machine };

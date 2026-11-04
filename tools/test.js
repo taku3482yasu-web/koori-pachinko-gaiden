@@ -444,18 +444,20 @@ for (const specId of Object.keys(CONFIG.specs)) {
     for (const mode of ['st', 'hst']) {
         const m = Machine.create(CONFIG, 's399', rng);
         m.mode = mode; m.stLeft = 100; m.fx = { rashMode: 'hashira' };
-        let n = 0, big = 0, shown = 0, wrong = 0;
+        let n = 0, big = 0, shown = 0, wrong = 0, upN = 0, upShown = 0;
         for (let i = 0; i < 100000; i++) {
             const result = { kind: 'hit', mode };
             const p = Show.plan(CONFIG, m, { fig: 2, result, holdsLeft: 0 }, rng);
             const k = spec.payout.rash.find(x => x.id === result.forcePay);
-            const isBig = k.rounds >= 20 || (k.uwanose && result.forceUwanose);
+            const full = k.rounds >= 20, up = k.uwanose && result.forceUwanose;
             const notice = Boolean(p.shuketsuNotice);
-            n++; if (isBig) big++; if (notice) shown++;
-            if (notice !== Boolean(isBig)) wrong++;
+            n++; if (full || up) big++; if (notice) shown++;
+            if (up) { upN++; if (notice) upShown++; }
+            if (full ? !notice : !up && notice) wrong++;
             if (notice && p.revive === 'win') wrong++;
         }
-        check(wrong === 0 && near(big / n, 0.5, 0.01), `柱の氷モード (${mode}): 3000発 以上だけ 告知 (${pct(shown / n)}。目標 50%)`);
+        check(wrong === 0 && near(big / n, 0.5, 0.01), `柱の氷モード (${mode}): 3000発 以上の 当たり ${pct(big / n)}・告知 ${pct(shown / n)}`);
+        check(near(1 - upShown / upN, SHOW.rashMode.uwanoseSilent, 0.01), `柱の氷モード (${mode}): 上乗せで 3000発の 告知なし ${pct(1 - upShown / upN)}`);
         const miss = Show.plan(CONFIG, m, { fig: 2, result: { kind: 'miss', mode }, holdsLeft: 0 }, rng);
         check(!miss.shuketsuNotice, `柱の氷モード (${mode}): はずれでは 告知なし`);
     }
@@ -472,6 +474,44 @@ for (const specId of Object.keys(CONFIG.specs)) {
     };
     const a = trust('onioni'), b = trust('koori');
     check(b > a + 0.1, `こおりくんモードの 先バレ ${pct(b)} > おにおにモード ${pct(a)}`);
+}
+// ラウンドの スキップ
+{
+    const play = (m, onTick) => { for (let i = 0; i < 30 * 400 && m.mode === 'bonus' || i < 60; i++) { Machine.update(m, 1 / 30); if (onTick) onTick(); } };
+    const bonusOf = (next, opt) => { const m = Machine.create(CONFIG, 's399', seeded(SEED + 12)); Machine.debugHold(m, 'hit', { next, promo: false, gizi: 0, gun: false, reach: 'normal', ...opt }); for (let i = 0; i < 30 * 40 && !m.bonus; i++) Machine.update(m, 1 / 30); return m; };
+    // 奇数図柄の 初当たり: すぐ スキップできて 3000発
+    let m = bonusOf('st');
+    check(Machine.canSkip(m) && Machine.skipBonus(m) === 3000 && m.bonus.phase === 'ending', 'スキップ: 3000発 まるごと');
+    // 昇格チャレンジ: 結果が わかるまで スキップできない
+    m = bonusOf('st', { promo: true });
+    let before = Machine.canSkip(m), during = false, after = false, balls = 0;
+    for (let i = 0; i < 30 * 200 && m.bonus && !after; i++) {
+        if (m.parts.attacker && i % 20 === 0) Machine.enter(m, 'attacker');
+        Machine.update(m, 1 / 30);
+        if (m.bonus && m.bonus.promo.state === 'run' && Machine.canSkip(m)) during = true;
+        if (m.bonus && m.bonus.promo.state === 'done') { after = Machine.canSkip(m); }
+    }
+    balls = Machine.skipBonus(m) + m.bonus.round * 0;
+    check(!before && !during && after && m.stats.promoWins === 1 && m.bonus.rounds === 20 && balls > 1500, `スキップ: 昇格チャレンジの 結果の あとから (${balls}発)`);
+    // 上乗せ: スキップの あとに 上乗せタイム → 判定
+    for (const win of [true, false]) {
+        const u = Machine.create(CONFIG, 's399', seeded(SEED + 13));
+        Machine.debugMode(u, 'st');
+        Machine.debugHold(u, 'hit', { pay: 'uwanose', uwanose: win, enemy: 'haru' });
+        for (let i = 0; i < 30 * 60 && !u.bonus; i++) Machine.update(u, 1 / 30);
+        u.events.length = 0;
+        const first = Machine.skipBonus(u);
+        const waited = u.bonus.phase === 'uwanoseWait' && u.events.some(e => e.type === 'uwanoseStart');
+        for (let i = 0; i < 30 * 20 && u.bonus.phase === 'uwanoseWait'; i++) Machine.update(u, 1 / 30);
+        const got = u.events.some(e => e.type === 'uwanose');
+        const second = win ? Machine.skipBonus(u) : 0;
+        check(first === 1500 && waited && got === win && second === (win ? 1500 : 0), `スキップ: 上乗せ${win ? '成功' : '失敗'} (${first} + ${second}発)`);
+    }
+    // チャージも スキップできる
+    const c = Machine.create(CONFIG, 's399', seeded(SEED + 14));
+    Machine.debugHold(c, 'charge', { next: 'normal' });
+    for (let i = 0; i < 30 * 30 && !c.bonus; i++) Machine.update(c, 1 / 30);
+    check(Machine.skipBonus(c) === 300, 'スキップ: チャージ 300発');
 }
 // 敵の 文字の 色 (ST・柱の氷RASH): 金は 80% 以上
 for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
