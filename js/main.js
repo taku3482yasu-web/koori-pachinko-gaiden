@@ -110,13 +110,24 @@
         if (sp.elapsed < to) { sp.elapsed = to; cues = []; }
     }
 
+    // ラウンドの スキップ (ボタン・S キー・台の ボタン 長押し)
+    function skipRounds() {
+        const m = game.machine;
+        if (!m || !Machine.canSkip(m)) return;
+        const balls = Machine.skipBonus(m);
+        game.balls += balls;
+        game.stats.paid += balls;
+        if (m.chain > 0) m.chainBalls += balls;
+        Sound.play('payout');
+    }
+
     // ----- 1 フレーム -----
     let time = 0;
     function tick(dt) {
         time += dt;
         const m = game.machine;
         if (time >= game.nextSave) { game.nextSave = time + 5; saveGame(); }
-        if (game.pushAt !== null && time - game.pushAt > 0.7) skipSpin(m);
+        if (game.pushAt !== null && time - game.pushAt > 0.7) { skipSpin(m); skipRounds(); }
         Lcd.setHolding(game.pushAt !== null);
         // 「ボタンを押せ」などは 押すまで 少し 演出を 止めて 待つ
         if (Lcd.promptWaiting()) {
@@ -426,6 +437,7 @@
         $('mode-display').textContent = mode;
         $('mode-display').className = 'mode-display mode-' + (m.bonus ? 'bonus' : m.mode === 'st' ? 'st' : m.mode === 'normal' ? 'normal' : 'jitan');
         $('aim-display').hidden = Machine.aim(m) !== 'right';
+        $('skip-button').hidden = !Machine.canSkip(m);
         const p = Lcd.prompt();
         $('push').classList.toggle('glow', p === 'push');
         $('lever').classList.toggle('glow', p === 'lever');
@@ -523,6 +535,7 @@
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('push').addEventListener(t, () => { game.pushAt = null; }));
     Cabinet.place($('push'), { x: Cabinet.CAB.push.x - Cabinet.CAB.push.r, y: Cabinet.CAB.push.y - Cabinet.CAB.push.r, w: Cabinet.CAB.push.r * 2, h: Cabinet.CAB.push.r * 2 });
     Cabinet.setupLever($('lever'), lever);
+    $('skip-button').addEventListener('click', () => { Sound.unlock(); skipRounds(); });
     $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; });
     $('sound-button').addEventListener('click', () => {
         Sound.unlock();
@@ -584,6 +597,7 @@
         else if (e.code === 'ArrowLeft') setStrength(game.strength - (e.shiftKey ? 10 : 1));
         else if (e.code === 'ArrowRight') setStrength(game.strength + (e.shiftKey ? 10 : 1));
         else if (e.code === 'KeyB' || e.code === 'Enter') { if (!e.repeat) { push(); game.pushAt = time; } }
+        else if (e.code === 'KeyS') skipRounds();
         else if (e.code === 'Digit1') chooseRash('onioni');
         else if (e.code === 'Digit2') chooseRash('hashira');
         else if (e.code === 'KeyL') { Cabinet.setupLever && document.getElementById('lever').dispatchEvent(new Event('keypull')); }

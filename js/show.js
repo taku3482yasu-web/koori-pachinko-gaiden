@@ -167,7 +167,8 @@ const SHOW = {
     },
     // RASH の カスタマイズ (2026-11-04 ユーザー指定。m.fx.rashMode): onioni スタンダード / koori 先読みの 期待度が 上がる / hashira (1/399 のみ) 3000発 以上の 当たりの 前に 集結告知
     //   koori: hit は 当たりで 先読みが 出る 倍率・miss は はずれで 出る 倍率
-    rashMode: { koori: { hit: 1.6, miss: 0.2 }, noticeTime: 2.8 },
+    //   uwanoseSilent: 上乗せで 3000発に なる 当たりの うち 告知なしの 割合 (2026-11-04 ユーザー指定)
+    rashMode: { koori: { hit: 1.6, miss: 0.2 }, noticeTime: 2.8, uwanoseSilent: 0.3 },
     // 先バレ (2026-11-04 ユーザー指定: 通常時も どちらの RASH も 発生。咆哮の ほうが 期待度が 高い)。通常時は hit: 当たりの ときの 割合 / rel: 出たら 当たる 割合。
     //   RASH 中は hashira.senbare の 割合。先バレの ときの ボタンの 色は 紫か 金 (金は RASH 突入濃厚)。gold: hit は 当たり (RASH へ 行く もの) の ときに 金に なる 割合・miss は それ以外
     senbare: { voice: { hit: 0.12, rel: 0.5 }, roar: { hit: 0.06, rel: 0.85 }, gold: { hit: 0.35, miss: 0.002 } },
@@ -526,7 +527,8 @@ const Show = (() => {
         return p;
     }
 
-    // RASH 中の 当たりの 出玉を 変動の はじめに きめる (確率は そのまま。Machine.startBonus が result.forcePay を 使う)。3000発 以上なら true
+    // RASH 中の 当たりの 出玉を 変動の はじめに きめる (確率は そのまま。Machine.startBonus が result.forcePay を 使う)。
+    // 3000発 以上で 告知する なら true (上乗せで 3000発に なる 当たりは uwanoseSilent が 告知なし)
     function rashPay(m, result, rng) {
         const pay = m.spec.payout;
         if (!pay || !isHit(result)) return false;
@@ -538,7 +540,8 @@ const Show = (() => {
             result.forcePay = k.id;
         }
         if (k.uwanose && result.forceUwanose === undefined) result.forceUwanose = rng() < m.spec.uwanose.success;
-        return k.rounds >= pay.first || (Boolean(k.uwanose) && result.forceUwanose);
+        if (k.uwanose) return result.forceUwanose && rng() >= SHOW.rashMode.uwanoseSilent;
+        return k.rounds >= pay.first;
     }
     const hashiraNotice = (m, big) => big && m.fx.rashMode === 'hashira';
 

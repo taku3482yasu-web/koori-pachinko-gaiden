@@ -634,6 +634,9 @@ const Lcd = (() => {
         } else if (e.type === 'promoEnd') {
             st.holdPrompt = false;
             st.action = null;
+        } else if (e.type === 'bonusSkip') {
+            banner('スキップ', `+${e.balls}発`, '#ffd84a', 1.6);
+            st.flash = 0.4;
         } else if (e.type === 'roundStart') {
             if (st.bonus) { st.bonus.round = e.round; st.bonus.count = 0; }
         } else if (e.type === 'count') {
