@@ -144,6 +144,9 @@ const SHOW = {
             { dur: 5, bg: 'bonus', who: ['koori'], end: true }
         ]
     },
+    // 先バレ (2026-11-04 ユーザー指定: 通常時も どちらの RASH も 発生。咆哮の ほうが 期待度が 高い)。通常時は hit: 当たりの ときの 割合 / rel: 出たら 当たる 割合。
+    //   RASH 中は hashira.senbare の 割合。先バレの ときの ボタンの 色は 紫か 金 (金は RASH 突入濃厚)。gold: hit は 当たり (RASH へ 行く もの) の ときに 金に なる 割合・miss は それ以外
+    senbare: { voice: { hit: 0.12, rel: 0.5 }, roar: { hit: 0.06, rel: 0.85 }, gold: { hit: 0.35, miss: 0.002 } },
     // 1・3・5 そろい: ST へ 行く 通常時の 当たりの うち この 割合。はずれは 1・3・5 に ならない
     sango: 0.08,
     // 背景: 満月の rel は 90% 以上 (rates が はずれの 割合を 計算する)。hitAhead は 保留に 当たりが ある 1 回転ごとの 出やすさ
@@ -270,7 +273,8 @@ const Show = (() => {
         const fromRel = v => v.hit * odds * (1 - v.rel) / v.rel;
         const step = Object.fromEntries(Object.entries(SHOW.stepUp.outcomes).map(([k, v]) => [k, fromRel(v)]));
         const iwakan = Object.fromEntries(Object.entries(SHOW.iwakan).map(([k, v]) => [k, fromRel(v)]));
-        const out = { reachMiss, mini, text, step, iwakan, moon: fromRel(SHOW.stage.moon) };
+        const senbare = { voice: fromRel(SHOW.senbare.voice), roar: fromRel(SHOW.senbare.roar) };
+        const out = { reachMiss, mini, text, step, iwakan, senbare, moon: fromRel(SHOW.stage.moon) };
         rateCache.set(m.specId, out);
         return out;
     }
@@ -282,15 +286,22 @@ const Show = (() => {
         return { text: list[Math.floor(rng() * list.length)], color: L.colors[c] };
     }
 
+    // 先バレの ボタンの 色
+    function buttonColor(toRash, rng) {
+        return rng() < (toRash ? SHOW.senbare.gold.hit : SHOW.senbare.gold.miss) ? 'gold' : 'purple';
+    }
+    // RASH 中の 先バレ
+    function rashSenbare(result, rng) {
+        const i = isHit(result) ? 0 : 1, r = rng();
+        const { voice, roar } = SHOW.hashira.senbare;
+        const senbare = r < roar[i] ? 'roar' : r < roar[i] + voice[i] ? 'voice' : null;
+        return { holdColor: 'white', shownColor: 'white', senbare, btn: senbare ? buttonColor(isHit(result), rng) : null };
+    }
+
     // ----- 保留 -----
     function hold(config, m, fig, result, rng) {
-        if (m.mode === 'hst') {
-            const i = isHit(result) ? 0 : 1, r = rng();
-            const { voice, roar } = SHOW.hashira.senbare;
-            const senbare = r < roar[i] ? 'roar' : r < roar[i] + voice[i] ? 'voice' : null;
-            return { holdColor: 'white', shownColor: 'white', senbare };
-        }
-        if (m.mode === 'st' || fig === 2) return { holdColor: 'white', shownColor: 'white' };
+        if (m.mode === 'hst' || m.mode === 'st') return rashSenbare(result, rng);
+        if (fig === 2) return { holdColor: 'white', shownColor: 'white' };
         // 1・3・5 そろい: 先読みなし
         if (isHit(result) && result.next === 'st' && m.mode === 'normal' && rng() < SHOW.sango) return { holdColor: 'white', shownColor: 'white', sango: true };
         // 昇格チャレンジを とおるか (偶数図柄)。ST へ 行かない 当たりは ぜんぶ、ST へ 行く 当たりは promo.st
@@ -308,7 +319,14 @@ const Show = (() => {
         if (result.force === 'reach' && color === 'white') color = 'blue';
         // 保留変化: 白で 入って 変動の はじめに 色が かわる (ときどき)
         const shown = color !== 'white' && rng() < 0.4 ? 'white' : color;
-        return { holdColor: color, shownColor: shown, promo };
+        // 先バレ (先読みなしの カスタマイズでは 出さない)
+        let senbare = null;
+        if (m.mode === 'normal' && senyomi > 0) {
+            const S = SHOW.senbare, R = rates(m), hit = isHit(result), v = rng();
+            const roar = hit ? S.roar.hit : R.senbare.roar, voice = hit ? S.voice.hit : R.senbare.voice;
+            senbare = v < roar ? 'roar' : v < roar + voice ? 'voice' : null;
+        }
+        return { holdColor: color, shownColor: shown, promo, senbare, btn: senbare ? buttonColor(isHit(result) && result.next === 'st', rng) : null };
     }
 
     // ----- 変動 -----

@@ -656,7 +656,7 @@ const Lcd = (() => {
             banner('時短 終了', `${e.chain}連`, '#c8d8ff', 2.5);
         } else if (e.type === 'chainEnd') {
             if (e.chain >= 2) st.chainEnd = { start: st.now, chain: e.chain, balls: e.balls };
-        } else if (e.type === 'hold' && e.result.senbare && m.mode === 'hst') {
+        } else if (e.type === 'hold' && e.result.senbare) {
             // 先バレ: 入った しゅんかんに 光る。先咆哮は おにおにが 叫んで 液晶が ゆれる
             st.flash = e.result.senbare === 'roar' ? 0.4 : 0.7;
             st.senbare = { start: st.now, kind: e.result.senbare };

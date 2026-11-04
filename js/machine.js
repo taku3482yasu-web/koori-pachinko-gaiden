@@ -468,7 +468,7 @@ const Machine = (() => {
         if (options.step) result.forceStep = options.step;
         if (options.promo !== undefined && result.kind === 'hit') result.promo = options.promo;
         if (options.holdColor) result.holdColor = result.shownColor = options.holdColor;
-        if (options.senbare) result.senbare = options.senbare;
+        if (options.senbare) { result.senbare = options.senbare; result.btn = options.btn || result.btn || 'purple'; }
         if (options.pay) result.forcePay = options.pay;
         if (options.uwanose !== undefined) result.forceUwanose = options.uwanose;
         m.holds[fig].unshift(result);

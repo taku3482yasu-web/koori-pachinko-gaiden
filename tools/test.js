@@ -298,6 +298,8 @@ for (const specId of Object.keys(CONFIG.specs)) {
         const result = { kind: h, mode: 'normal', next: 'st' };
         Object.assign(result, Show.hold(CONFIG, m, 1, result, rng));
         if (result.sango) { add(h, 'sango'); continue; }
+        if (result.senbare) add(h, 'sb:' + result.senbare);
+        if (result.btn) add(h, 'btn:' + result.btn);
         const q = Show.plan(CONFIG, m, { fig: 1, result, holdsLeft: i % 3 }, rng);
         if (q.figures.join() === '1,3,5') check(false, 'はずれは 1・3・5 に ならない');
         if (q.step) add(h, 'step:' + q.step.id);
@@ -328,6 +330,8 @@ for (const specId of Object.keys(CONFIG.specs)) {
     }
     check(near(trust('win:goldDog'), 0.95, 0.03), `${label}: 金面犬を 発見したら 95% 当たり (${pct(trust('win:goldDog'))})`);
     check(trust('step:s3gold') > 0.85 && trust('step:s3gold') > trust('step:s3red') && trust('step:s3red') > trust('step:s3'), `${label}: ステップアップ 3 段 白 ${pct(trust('step:s3'))} < 赤 ${pct(trust('step:s3red'))} < 金 ${pct(trust('step:s3gold'))}`);
+    check(trust('sb:roar') > trust('sb:voice') && trust('sb:roar') > 0.7, `${label}: 通常時の 先バレ 音 ${pct(trust('sb:voice'))} < 咆哮 ${pct(trust('sb:roar'))}`);
+    check(trust('btn:gold') > 0.9 && trust('btn:gold') > trust('btn:purple'), `${label}: ボタン 紫 ${pct(trust('btn:purple'))} < 金 ${pct(trust('btn:gold'))}`);
     check(trust('iwakan') > 0.6, `${label}: 違和感 ${pct(trust('iwakan'))}`);
     check(trust('gizi:3') > trust('gizi:1'), `${label}: 疑似連 2連 ${pct(trust('gizi:1'))} < 4連 ${pct(trust('gizi:3'))}`);
     check(trust('line:#ffd84a') > trust('line:#ffffff'), `${label}: セリフ 白 ${pct(trust('line:#ffffff'))} < 金 ${pct(trust('line:#ffd84a'))}`);
@@ -412,6 +416,22 @@ for (const specId of Object.keys(CONFIG.specs)) {
     check(trust('self:color') > 0.8, `${spec.label}: 白以外の 技 撃破率 ${pct(trust('self:color'))} (白 ${pct(trust('self:white'))})`);
     check(trust('foe:gold') === 1 && trust('foe:red') > trust('foe:purple'), `${spec.label}: 敵の 技 紫 ${pct(trust('foe:purple'))} < 赤 ${pct(trust('foe:red'))} < 金 確定`);
     check(trust('team') > 0.9 && trust('team') > trust('one'), `${spec.label}: 仲間 1 人 ${pct(trust('one'))}・チーム ${pct(trust('team'))}`);
+}
+// 先バレ: おにおにRASH でも 出る
+{
+    const rng = seeded(SEED + 9), m = Machine.create(CONFIG, 's319', rng);
+    m.mode = 'st';
+    const c = { hit: 0, gold: 0, fall: 0, fallGold: 0 };
+    for (let i = 0; i < 200000; i++) {
+        const hit = i % 2 === 0;
+        const r = { kind: hit ? 'hit' : 'fall', mode: 'st', ...{} };
+        Object.assign(r, Show.hold(CONFIG, m, 2, r, rng));
+        if (r.senbare) { c[hit ? 'hit' : 'fall']++; if (r.btn === 'gold') c[hit ? 'gold' : 'fallGold']++; }
+    }
+    check(c.hit > 0 && c.gold > 0 && c.fallGold === 0, `おにおにRASH の 先バレ (当たり ${c.hit}・転落 ${c.fall}・金 ${c.gold})`);
+    const j = Machine.create(CONFIG, 's399', rng);
+    j.mode = 'jitan';
+    check(!Show.hold(CONFIG, j, 2, { kind: 'miss' }, () => 0).senbare, '時短の 電チューでは 先バレなし');
 }
 // 敵の 文字の 色 (ST・柱の氷RASH): 金は 80% 以上
 for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
