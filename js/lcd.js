@@ -468,6 +468,11 @@ const Lcd = (() => {
         if (a && a.from === from && !a.done && el >= to) { a.done = true; a.doneAt = st.now; a.auto = true; }
         return a && a.from === from ? a : null;
     }
+    // 時間切れ (押さなかった)
+    function closeAction() {
+        const a = st.action;
+        if (a && !a.done) { a.done = true; a.doneAt = st.now; a.auto = true; }
+    }
     function drawPrompt(a, now) {
         if (!a) return;
         if (!a.done) {
@@ -603,6 +608,7 @@ const Lcd = (() => {
         } else if (e.type === 'spinEnd') {
             st.last = { plan: e.plan, result: e.result, at: st.now };
             st.holdPrompt = false;
+            st.action = null;
         } else if (e.type === 'bonusStart') {
             st.bonus = { rounds: e.rounds, round: 0, count: 0, next: e.next, from: e.from, chain: e.chain, start: st.now, payKind: e.payKind, charge: e.charge };
             st.uwanose = null;
@@ -626,6 +632,7 @@ const Lcd = (() => {
             Object.assign(st, { action: null, promoGauge: 0, promoLast: 0, promoFlash: false, promoHit: false });
         } else if (e.type === 'promoEnd') {
             st.holdPrompt = false;
+            st.action = null;
         } else if (e.type === 'roundStart') {
             if (st.bonus) { st.bonus.round = e.round; st.bonus.count = 0; }
         } else if (e.type === 'count') {
@@ -944,6 +951,7 @@ const Lcd = (() => {
         st.promoGauge = Math.min(final, Math.max(st.promoGauge || 0, auto) + (st.holding && t >= T.intro ? dt * 1.5 : 0));
         if (t >= T.charge) st.promoGauge = final;
         st.holdPrompt = t >= T.intro && t < T.charge;
+        if (t >= T.clash) closeAction();
         background('hideout', now);
         ctx.fillStyle = 'rgba(30, 0, 50, 0.55)';
         ctx.fillRect(0, 0, W, H);
@@ -1328,6 +1336,7 @@ const Lcd = (() => {
     function drawBattle(m, plan, el, D, now) {
         const t = plan.t, e = SHOW.enemies[plan.enemy], B = SHOW.stBattle, walk = Math.floor(now * 6);
         const dashing = el < t.enemy, lost = plan.revive !== 'none';
+        if (el >= t.result) closeAction();
         background(dashing ? 'templeRun' : 'templeFight', now);
         header(m, now);
         if (dashing) {
