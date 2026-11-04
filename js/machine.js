@@ -8,6 +8,7 @@
 //           大当たり → ラウンドの あと また ST / 転落 → 通常時へ (おにおにが たおされる)
 //   大当たりは spec.rounds ラウンド (1/319 は いつも 3R)。spec.payout が ある 台 (1/399) は 初当たり 20R・RASH 中は 振り分け、
 //   上乗せタイム (spec.uwanose) が 成功すると ラウンドが ふえる (できごと uwanoseStart → iwakan → uwanose / uwanoseEnd)
+//   チャージ (2026-11-04 ユーザー指定。spec.charge): 通常時の ヘソの 低確率の 当たり (result.kind 'charge')。300発 (2R) を 右打ちで。spec.charge.st (5%) で ST、のこりは 通常時へ (回転数・連チャンは そのまま)
 //   ST は 2 つ (2026-11-04 ユーザー指定)。ST に 入る 大当たりの あいだに えらぶ (m.rashType。Machine.setRashType):
 //     おにおにRASH ('onioni'。mode 'st'): 上の 転落型
 //     柱の氷RASH ('hashira'。mode 'hst'): 前作と 同じ ST 型。spec.hashira.spins 回 (100 回) の あいだ spec.hashira.hitRate で 当たりを ねらう。
@@ -50,7 +51,7 @@ const Machine = (() => {
             parts: { denchu: false, attacker: false },
             story: 0,                // 通常時の ストーリーの すすみ (演出。Show.stepStory)
             normalSpins: 0,          // 通常時の 回転数 (当たりで 0)
-            stats: { spins1: 0, spins2: 0, firstHits: 0, stEntries: 0, jitanEntries: 0, jitanHits: 0, stHits: 0, falls: 0, hstEntries: 0, hstHits: 0, hstEnds: 0, bonusRounds: 0, bestChain: 0 },
+            stats: { spins1: 0, spins2: 0, firstHits: 0, charges: 0, chargeSt: 0, stEntries: 0, jitanEntries: 0, jitanHits: 0, stHits: 0, falls: 0, hstEntries: 0, hstHits: 0, hstEnds: 0, bonusRounds: 0, bestChain: 0 },
             events: []
         };
     }
@@ -76,6 +77,8 @@ const Machine = (() => {
             const next = m.mode === 'normal' && fig === 1 ? weightedPick(m.spec.firstHit, m.rng).next : 'st';
             return { kind: 'hit', mode: lm, next };
         }
+        const c = m.spec.charge;
+        if (c && m.mode === 'normal' && fig === 1 && r < m.spec.hitRate + c.rate) return { kind: 'charge', mode: lm, next: m.rng() < c.st ? 'st' : 'normal' };
         return { kind: 'miss', mode: lm };
     }
 
@@ -118,8 +121,8 @@ const Machine = (() => {
             const fig = m.holds[2].length ? 2 : m.holds[1].length ? 1 : 0;
             if (!fig) return;
             let result = m.holds[fig].shift();
-            if (result.mode !== lotteryMode(m)) {
-                // 状態が かわった (ST の 保留が 転落の あとに まわる など): いまの 状態で 決めなおす
+            if (result.mode !== lotteryMode(m) || (result.kind === 'charge' && m.mode !== 'normal')) {
+                // 状態が かわった (ST の 保留が 転落の あとに まわる・チャージの 保留が 時短で まわる など): いまの 状態で 決めなおす
                 const again = draw(m, fig);
                 addShow(m, fig, again);
                 result = again;
@@ -152,6 +155,7 @@ const Machine = (() => {
         m.spin = null;
         emit(m, 'spinEnd', { fig, result, plan });
         if (result.kind === 'hit') startBonus(m, result, fig);
+        else if (result.kind === 'charge') startCharge(m, result, fig);
         else if (result.kind === 'fall') fall(m);
         else if (hstLast && m.mode === 'hst') {
             // 柱の氷RASH の 100 回を ぬけた
@@ -199,7 +203,7 @@ const Machine = (() => {
         m.jitanLeft = 0;
         let rounds = m.spec.rounds, payKind = null, uwanose = null;
         const pay = m.spec.payout;
-        if (pay && from === 'normal') { rounds = pay.first; payKind = 'first'; }
+        if (pay && from === 'normal') { rounds = result.next === 'st' ? pay.first : pay.firstJitan; payKind = 'first'; }
         else if (pay) {
             const k = (result.forcePay && pay.rash.find(x => x.id === result.forcePay)) || weightedPick(pay.rash, m.rng);
             rounds = k.rounds;
@@ -216,6 +220,16 @@ const Machine = (() => {
         m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.opening, next: result.next, from, fig, payKind, uwanose };
         m.stats.bonusRounds += rounds;
         emit(m, 'bonusStart', { rounds, next: result.next, from, chain: m.chain, fig, plan: result.plan || null, payKind });
+    }
+
+    // チャージ: 初当たりには 数えない。ST へ 行くときは ending で 連チャンを はじめる
+    function startCharge(m, result, fig) {
+        const cfg = m.config.machine.bonus, rounds = m.spec.charge.rounds;
+        m.stats.charges++;
+        m.mode = 'bonus';
+        m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.chargeOpening, next: result.next, from: 'normal', fig, payKind: null, uwanose: null, charge: true };
+        m.stats.bonusRounds += rounds;
+        emit(m, 'bonusStart', { rounds, next: result.next, from: 'normal', chain: m.chain, fig, plan: null, payKind: null, charge: true });
     }
 
     // 上乗せタイム (window 秒)。成功なら iwakanAt 秒に 違和感 → reveal 秒 あとに ラウンドが ふえる
@@ -249,8 +263,14 @@ const Machine = (() => {
             emit(m, 'roundEnd', { round: b.round, count: b.count });
             if (b.round >= b.rounds && !(b.uwanose && b.uwanose.phase === 'time')) {
                 b.phase = 'ending';
-                b.timer = cfg.ending;
-                emit(m, 'ending', { next: b.next, chain: m.chain, from: b.from });
+                b.timer = b.charge && b.next !== 'st' ? cfg.chargeEnding : cfg.ending;
+                if (b.charge && b.next === 'st') {
+                    m.stats.chargeSt++;
+                    m.chain = 1;
+                    m.normalSpins = 0;
+                    m.stats.bestChain = Math.max(m.stats.bestChain, 1);
+                }
+                emit(m, 'ending', { next: b.next, chain: m.chain, from: b.from, charge: Boolean(b.charge) });
             } else {
                 b.phase = 'interval';
                 b.timer = cfg.interval;
@@ -280,6 +300,9 @@ const Machine = (() => {
                     m.stLeft = m.spec.hashira.spins;
                 } else m.mode = 'st';
                 emit(m, 'stStart', { chain: m.chain, entry: !inRash, rash: m.rashType, spins: m.stLeft });
+            } else if (b.next === 'normal') {
+                m.mode = 'normal';   // チャージの おわり
+                emit(m, 'chargeEnd', {});
             } else {
                 m.stats.jitanEntries++;
                 m.mode = 'jitan';
@@ -352,12 +375,14 @@ const Machine = (() => {
     }
 
     // ----- デバッグ用 -----
-    // 保留を 1 つ 先頭に 足す。kind: 'hit' / 'fall' / 'miss' / 'reach' (リーチはずれ)。next: 'st' / 'jitan'。options.enemy: ST の 相手
+    // 保留を 1 つ 先頭に 足す。kind: 'hit' / 'fall' / 'miss' / 'reach' (リーチはずれ) / 'charge'。next: 'st' / 'jitan'。options.enemy: ST の 相手
+    // options.reach: リーチの 種類 / mini + miniWin: ミニゲームと 成否 / textColor: 敵の カットインの 文字の 色 / gizi: 疑似連の 回数
     function debugHold(m, kind, options = {}) {
         const fig = m.mode === 'normal' ? 1 : 2;
         const result = { kind: kind === 'reach' ? 'miss' : kind, mode: lotteryMode(m) };
         if (kind === 'hit') result.next = m.mode === 'normal' ? (options.next || 'st') : 'st';
         if (kind === 'reach') result.force = 'reach';
+        if (kind === 'charge') result.next = options.next === 'st' ? 'st' : 'normal';
         if (options.enemy) result.forceEnemy = options.enemy;
         if (options.yaku) result.forceYaku = true;
         if (options.reach) result.forceReach = options.reach;
@@ -366,6 +391,9 @@ const Machine = (() => {
         if (options.shuketsu !== undefined) result.forceShuketsu = options.shuketsu;
         if (options.attack) result.forceAttack = options.attack;
         if (options.gun !== undefined) result.forceGun = options.gun;
+        if (options.mini) { result.forceMini = options.mini; result.forceMiniWin = options.miniWin !== false; }
+        if (options.textColor) result.forceText = options.textColor;
+        if (options.gizi !== undefined) result.forceGizi = options.gizi;
         addShow(m, fig, result);
         if (options.holdColor) result.holdColor = result.shownColor = options.holdColor;
         if (options.senbare) result.senbare = options.senbare;

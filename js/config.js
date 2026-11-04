@@ -110,7 +110,8 @@ const CONFIG = {
 
     // ----- スペック (2026-11-03 ユーザー指定) -----
     //   1/319: 大当たりは いつも 3R (約 450個)。初当たりの 50% が ST、50% が 時短 100回 (確率は 1/319 の まま・当たれば ST)。ST の 継続率 約 80%
-    //   1/399: 初当たりは 3000発 (20R)。RASH 中は 3000発・1500発・上乗せタイム (spec.payout)。初当たりの 80% が ST、20% が 時短 100回。ST の 継続率 約 75% (出玉は 1/399 の ほうが 多め)
+    //   1/399: 初当たりの 50% は 3000発 (20R) で ST、50% は 1500発 (10R) で 時短 100回。RASH 中は 3000発・1500発・上乗せタイム (spec.payout)。ST の 継続率 約 75% (出玉は 1/399 の ほうが 多め)
+    //   チャージ (2026-11-04 ユーザー指定。spec.charge): 通常時の ヘソで rate (低確率。1/200 は Claude が きめた) で 入る 300発 (2R) の 当たり。そのあいだは 右打ち。st (5%) で ST へ。のこりは 通常時に もどる
     //   ST は 転落型: 1 回転ごとに「大当たり (st.hitRate)」と「転落 (st.fallRate)」を 抽選。継続率 = hit / (hit + fall)。
     //     どちらかが 出た 回転は おにおにの バトル (相手で 撃破率が かわる。show.battle)。大当たりなら 撃破、転落なら おにおにが たおされて 通常時へ
     // ----- 設定 1〜6 (2026-11-04 ユーザー指定: 前作と おなじく 設定を つける) -----
@@ -147,40 +148,46 @@ const CONFIG = {
             note: 'いつも 3R (約450個)。初当たりの 50% が ST・のこりは 時短100回。ST 継続率 約80%',
             hitRate: 1 / 319.6,
             rounds: 3,
+            charge: { rate: 1 / 200, rounds: 2, st: 0.05 },
             firstHit: [{ weight: 50, next: 'st' }, { weight: 50, next: 'jitan' }],
             jitanSpins: 100,
             st: { hitRate: 1 / 60, fallRate: 1 / 240 },
             // 柱の氷RASH: 100 回で 当たりを ねらう (1 − (1 − 1/62.6)^100 ≒ 80%)
             hashira: { hitRate: 1 / 62.6, spins: 100 },
             target: { st: 0.5, continuation: 0.8 },
-            // 設定 1〜6 の 釘 (1000円で 約 25 〜 39 回転。3R なので よく 回らないと 勝てない)
-            settings: [{ hesoWidth: 12.2, heso: 0.113 }, { hesoWidth: 13.5, heso: 0.133 }, { hesoWidth: 14.2, heso: 0.148 },
-                { hesoWidth: 15.4, heso: 0.17 }, { hesoWidth: 16.2, heso: 0.194 }, { hesoWidth: 16.9, heso: 0.22 }]
+            // 設定 1〜6 の 釘 (1000円で 約 20 〜 34 回転。3R なので よく 回らないと 勝てない)
+            settings: [{ hesoWidth: 10.4, heso: 0.086 }, { hesoWidth: 11.7, heso: 0.1 }, { hesoWidth: 12.6, heso: 0.113 },
+                { hesoWidth: 13.6, heso: 0.133 }, { hesoWidth: 14.6, heso: 0.154 }, { hesoWidth: 15.7, heso: 0.179 }]
         },
         s399: {
             label: '1/399', name: 'ミドルスペック',
-            note: '初当たりは 3000発。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。初当たりの 80% が ST・のこりは 時短100回。ST 継続率 約75%',
+            note: '初当たりの 50% は 3000発で ST (LT)・のこりは 1500発で 時短100回。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。ST 継続率 約75%',
             hitRate: 1 / 399.6,
             rounds: 10,
+            lt: true,   // RASH は LT (ラッキートリガー)。RASH の 名前の よこに「LT」と 出す (2026-11-04 ユーザー指定)
+            charge: { rate: 1 / 200, rounds: 2, st: 0.05 },
             // 出玉の 振り分け (2026-11-04 ユーザー指定)。1R = 10C x 15 = 150発 なので 3000発 = 20R・1500発 = 10R
-            //   first: 初当たり (通常時の 当たり) は いつも 3000発
+            //   first: ST へ 行く 初当たりは 3000発 / firstJitan: 時短へ 行く 初当たりは 1500発 (2026-11-04 ユーザー指定)
             //   rash: RASH・時短の 当たり。3000発 25% / 1500発 25% / 1500発 + 上乗せタイム 50%
             //   (時短の 当たりも ここ。「最初は 3000発」は 通常時の 当たりだけ と した。Claude が きめた)
             payout: {
                 first: 20,
+                firstJitan: 10,
                 rash: [{ id: 'full', weight: 25, rounds: 20 }, { id: 'base', weight: 25, rounds: 10 }, { id: 'uwanose', weight: 50, rounds: 10, uwanose: true }]
             },
             // 上乗せタイム: ラウンド中 (rounds の どれかの ラウンドの はじめ) に 発生。window 秒 以内に 違和感が 起きたら 成功で addRounds (1500発) 上乗せ。
             //   success: 成功する 割合 / iwakan: 違和感が 起きる 秒 [はやい, おそい] / reveal: 違和感から 上乗せを 知らせる までの 秒
             uwanose: { success: 0.5, addRounds: 10, window: 10, rounds: [2, 5], iwakan: [2, 8.5], reveal: 1.2 },
-            firstHit: [{ weight: 80, next: 'st' }, { weight: 20, next: 'jitan' }],
+            firstHit: [{ weight: 50, next: 'st' }, { weight: 50, next: 'jitan' }],
             jitanSpins: 100,
             st: { hitRate: 1 / 70, fallRate: 1 / 210 },
             hashira: { hitRate: 1 / 72.6, spins: 100 },   // 1 − (1 − 1/72.6)^100 ≒ 75%
-            target: { st: 0.8, continuation: 0.75 },
-            // 設定 1〜6 の 釘 (1000円で 約 8 〜 13.5 回転。3000発・上乗せで 出玉が 多い ぶん、しめて ある)
-            settings: [{ hesoWidth: 6.1, heso: 0.032 }, { hesoWidth: 6.25, heso: 0.037 }, { hesoWidth: 6.6, heso: 0.041 },
-                { hesoWidth: 7.2, heso: 0.045 }, { hesoWidth: 7.3, heso: 0.05 }, { hesoWidth: 7.6, heso: 0.054 }]
+            target: { st: 0.5, continuation: 0.75 },
+            // 設定 1〜6 の 釘 (設定1〜5 は 1000円で 約 9 〜 13 回転。3000発・上乗せで 出玉が 多い ぶん、しめて ある)
+            // 設定6 (2026-11-04 ユーザー指定): 確率が 低いので 1/319 の 設定6 より 回す。出玉率は 高く なっても よい
+            settings: [{ hesoWidth: 6.15, heso: 0.035 }, { hesoWidth: 6.5, heso: 0.039 }, { hesoWidth: 6.8, heso: 0.043 },
+                { hesoWidth: 7.25, heso: 0.047 }, { hesoWidth: 7.3, heso: 0.051 }, { hesoWidth: 16.4, heso: 0.203 }],
+            settingRtp: [0.8, 0.88, 0.96, 1.04, 1.12, 2.45]
         }
     },
 
@@ -192,7 +199,7 @@ const CONFIG = {
         // 変動の 時間 (秒)。通常時は 演出で きまる (show.js)。ST・時短中は 速い
         spin: { fast: 1.6, battle: 9 },
         // 大当たり: opening → ラウンド (count 個か maxTime 秒) → interval → … → ending
-        bonus: { opening: 4, count: 10, maxTime: 25, interval: 1.2, ending: 5 },
+        bonus: { opening: 4, count: 10, maxTime: 25, interval: 1.2, ending: 5, chargeOpening: 1.6, chargeEnding: 1.5 },
         // 普図 (ゲート → 電チュー)。support = ST・時短中 (電サポ)
         futsu: {
             normal: { rate: 1 / 16, spin: 12, opens: 1, open: 0.2, gap: 0 },

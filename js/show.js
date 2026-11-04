@@ -7,8 +7,11 @@
 //
 // 通常時 (ストーリー 2026-11-03 ユーザー指定): こおりくんが 行方不明 → おにおにが さがす → 柱の氷の うわさ →
 //   ライバル探検隊と 合流 → 柱の氷 (ハルゥ・オカディシ・カネーズ) と たたかう
-//   リーチ: ノーマル → 探検隊リーチ (ライバル探検隊) → 柱の氷リーチ (ハルゥ / オカディシ / カネーズ。カネーズが いちばん 熱い)
-//   チャンスアップ: 保留の 色・カットインの 色・群 (ふぶき)・PUSH ボタン・金棒レバー・役物
+//   変動の 流れ (2026-11-04 ユーザー指定): セリフ → 疑似連 (NEXT) → 群 → ミニゲーム → 失敗なら はずれ / 成功なら リーチ → SPリーチ → 撃破で 当たり
+//   リーチ: ノーマル → 探検隊リーチ → SPリーチ (ハリージェネラル < アサタナ < ハルゥ < オカディシ < カネーズ) → 柱の氷リーチ (3 人 同時。80% 以上)
+//   ミニゲーム (成功度の 低い 順): おかもぅダッシュ < イシイー遺跡チャレンジ < マッスルチャレンジ < ASAHARA宣言 < ゴールド金面犬発見チャレンジ (発見で 95% 当たり)
+//   チャンスアップ: 保留の 色・セリフの 色・疑似連・カットインの 色・敵の カットインの 文字の 色 (白 < 赤 < 金。金は 80% 以上)・群 (ふぶき)・PUSH ボタン・金棒レバー・役物
+//   rel = 出たら 当たる 割合。はずれで 出る 割合は スペックの 確率から rates() が 計算する
 // ST (バトル): 当たり・転落の 変動は おにおにの バトル。相手で 撃破率が かわる (show.battle)
 //   相手は 結果から えらぶ: 当たりなら weight × 撃破率、転落なら weight × (1 − 撃破率)。
 //   こう すると「その 相手が 出たときの 撃破率」が ちょうど kill に なる (weight は スペックの 継続率に 合わせて ある)
@@ -22,11 +25,12 @@
 const SHOW = {
     // ST の 相手 (2026-11-03 ユーザー指定: 撃破率が 高い 順に ハリージェネラル > ヒョウガリュウ > ハルゥ > オカディシ > カネーズ)
     enemies: {
-        harigeneral: { name: 'ハリージェネラル', kill: 0.95, side: 'ally', ryuha: 'はり一族の 将軍', color: '#ffd84a' },
+        harigeneral: { name: 'ハリージェネラル', kill: 0.95, side: 'ally', ryuha: 'はり一族の 将軍', color: '#ffd84a', intro: 'はり一族の 力を 見よ！', win: '出直してくるがよい！', lose: 'ばかな… 針が 折れた…' },
         hyougaryu:   { name: 'ヒョウガリュウ', kill: 0.85, side: 'ally', ryuha: '氷河の 竜', color: '#7ad8ff' },
-        haru:        { name: 'ハルゥ', kill: 0.70, side: 'hashira', ryuha: '嵐の 流派', color: '#9cf0b0' },
-        okadishi:    { name: 'オカディシ', kill: 0.50, side: 'hashira', ryuha: '大渦の 流派', color: '#5a9cff' },
-        kanezu:      { name: 'カネーズ', kill: 0.30, side: 'hashira', ryuha: '吹雪の 流派', color: '#e0e8ff' }
+        asatana:     { name: 'アサタナ', kill: 0.6, side: 'hashira', ryuha: '柱の氷の 下っ端', color: '#a8c8e8', intro: 'ここは 通さないぞ！', win: 'へへっ ざまあみろ！', lose: 'ひいい… カネーズさま…' },
+        haru:        { name: 'ハルゥ', kill: 0.70, side: 'hashira', ryuha: '嵐の 流派', color: '#9cf0b0', intro: '嵐が おまえを さらう！', win: '風は わたしの みかただ', lose: '嵐が… やんだ…' },
+        okadishi:    { name: 'オカディシ', kill: 0.50, side: 'hashira', ryuha: '大渦の 流派', color: '#5a9cff', intro: '大渦に のまれろ！', win: 'うずの そこで ねむれ', lose: 'うずが… ほどける…' },
+        kanezu:      { name: 'カネーズ', kill: 0.30, side: 'hashira', ryuha: '吹雪の 流派', color: '#e0e8ff', intro: '古き しきたりに したがえ！', win: 'これが こおり一族の 力だ', lose: 'しきたりが… くずれる…' }
     },
     // 相手の 出やすさ (スペックごと)。Σ weight × kill / Σ weight = 継続率 に なる ように して ある (tools/test.js で たしかめる)
     battleWeights: {
@@ -50,20 +54,59 @@ const SHOW = {
         rainbow: { hit: 0.02, miss: 0 }
     },
 
-    // リーチの 出やすさ (通常時)。hit: 当たりの ときの 割合 / miss: はずれの ときの 割合
+    // リーチの 出やすさ (通常時)。hit: 当たりの ときの 割合 / miss: はずれの 変動で 出る 割合 / rel: 出たら 当たる 割合 (はずれで 出る 割合は rates() が 計算する)
     reaches: {
         normal:  { name: 'ノーマルリーチ', hit: 0.04, miss: 0.07 },
-        tanken:  { name: '探検隊リーチ', hit: 0.16, miss: 0.035 },
-        haru:    { name: '柱の氷リーチ ハルゥ', hit: 0.16, miss: 0.016 },
-        okadishi: { name: '柱の氷リーチ オカディシ', hit: 0.2, miss: 0.009 },
-        kanezu:  { name: '柱の氷リーチ カネーズ', hit: 0.36, miss: 0.0045 },
+        tanken:  { name: '探検隊リーチ', hit: 0.05, miss: 0.03 },
+        harigeneral: { name: 'SPリーチ ハリージェネラル', hit: 0.07, rel: 0.02 },
+        asatana: { name: 'SPリーチ アサタナ', hit: 0.09, rel: 0.04 },
+        haru:    { name: 'SPリーチ ハルゥ', hit: 0.12, rel: 0.08 },
+        okadishi: { name: 'SPリーチ オカディシ', hit: 0.15, rel: 0.15 },
+        kanezu:  { name: 'SPリーチ カネーズ', hit: 0.2, rel: 0.35 },
+        hashiraAll: { name: '柱の氷リーチ', hit: 0.26, rel: 0.82 },
         zenkaiten: { name: '全回転', hit: 0.02, miss: 0 }
+    },
+    // 敵と たたかう リーチ (敵の カットインの 文字の 色が つく)
+    battleReaches: ['harigeneral', 'asatana', 'haru', 'okadishi', 'kanezu', 'hashiraAll'],
+    // 敵の カットインの 文字の 色 (2026-11-04 ユーザー指定: 内部の 期待度で かわる。ふだんは 白)。
+    //   hit: 当たりの ときの 割合 / rel: 出たら 当たる 割合 (金は 80% 以上)
+    textColors: { gold: { hit: 0.2, rel: 0.85 }, red: { hit: 0.35, rel: 0.4 } },
+    // ST・柱の氷RASH の バトルの 文字の 色 (当たり / はずれの 割合)
+    battleText: { hit: { gold: 0.25, red: 0.4 }, st: { gold: 0.01, red: 0.2 }, hst: { gold: 0.005, red: 0.06 } },
+    // ミニゲーム (2026-11-04 ユーザー指定。成功度の 低い 順)。前作の チャレンジと おなじく、成功すると リーチへ、失敗すると はずれ。
+    //   hit: 当たりの ときの 重み / win: 全体の 成功率 / rel: 成功したら 当たる 割合 / high: 熱い リーチ (miniHigh) の ときだけ 出る
+    minis: {
+        okamou:  { name: 'おかもぅダッシュ', who: 'okamou', hit: 24, win: 0.2, rel: 0.04 },
+        ishii:   { name: 'イシイー遺跡チャレンジ', who: 'ishii', hit: 24, win: 0.35, rel: 0.08 },
+        muscle:  { name: 'マッスルイケノーブルのマッスルチャレンジ', who: 'ikenoble', hit: 22, win: 0.5, rel: 0.15 },
+        asahara: { name: 'ASAHARA宣言', who: 'asahara', hit: 18, win: 0.65, rel: 0.35 },
+        goldDog: { name: 'ゴールド金面犬発見チャレンジ', who: 'goldDog', hit: 30, win: 0.8, rel: 0.95, high: true }
+    },
+    miniShare: 0.7,                      // 当たりの SPリーチの うち ミニゲームを とおる 割合
+    miniHigh: ['kanezu', 'hashiraAll'],
+    // 疑似連 (前作と おなじ。NEXT で 図柄が 回り直す 回数の 重み)。ミニゲームか SPリーチに 入る 変動だけ
+    gizi: { hit: { 0: 35, 1: 25, 2: 22, 3: 18 }, reach: { 0: 65, 1: 22, 2: 10, 3: 3 }, fail: { 0: 85, 1: 12, 2: 3, 3: 0 } },
+    // セリフ (通常時の 変動の はじめに ふるカワが しゃべる。前作と おなじ 考え方)。熱さ 0〜6 で 出やすさと 色が かわる
+    //   熱さ: はずれ 0 / ミニゲーム失敗 1 / ノーマルリーチ 2 / SPリーチ はずれ 3 / 当たり 5 / 虹保留 6
+    lines: {
+        appear: [0.12, 0.3, 0.45, 0.6, 0.75, 0.85, 1],
+        colorWeights: [{ 0: 85, 1: 12, 2: 3 }, { 0: 50, 1: 35, 2: 15 }, { 0: 30, 1: 30, 2: 30, 3: 10 }, { 1: 20, 2: 30, 3: 40, 4: 10 }, { 1: 10, 2: 20, 3: 40, 4: 30 }, { 2: 10, 3: 35, 4: 55 }, { 5: 100 }],
+        colors: ['#ffffff', '#4f9bff', '#3fdf6f', '#ff3a3a', '#ffd84a', 'rainbow'],
+        text: [
+            ['おにおに、がんばれ！', 'こおりくん どこだろう…', 'なにか 来そう…？'],
+            ['ん…？ なんだか 気になる', 'ちょっと 期待していいかも'],
+            ['いける いける！', 'チャンスかも！'],
+            ['これは 来るかも…！', 'チャンス！！'],
+            ['激アツだよ！！', 'きたきたーっ！！'],
+            ['すごいのが 来る…！！！']
+        ]
     },
     // 演出の 部品 (当たり / はずれ の 出やすさ。リーチの ときだけ)
     parts: {
         gun:    { hit: 0.18, miss: 0.006 },           // 群 (ふぶきの 中を ライバル探検隊が かけぬける)
         cutin:  { blue: [0.25, 0.6], green: [0.3, 0.3], red: [0.35, 0.09], gold: [0.1, 0.01] },   // [当たり, はずれ]
         button: { push: [0.3, 0.3], lever: [0.42, 0.015] },   // PUSH ボタン / 金棒レバー
+        chance: { hit: 0.5, miss: 0.1 },      // SPリーチ中の「チャンスアップ！」
         yaku:   { hit: 0.22, miss: 0.0008 }           // 役物が 動く (ほぼ 当たり)
     },
     // ストーリーの 場面 (通常時の 背景)
@@ -89,7 +132,9 @@ const SHOW = {
     // missReachByHolds: はずれの リーチの 出やすさを、のこりの 保留ごとに 何倍に するか (保留が たまると リーチが へる)
     plainByHolds: [5.2, 4, 2.4, 1.4],
     missReachByHolds: [1, 1, 0.6, 0.35],
-    time: { normalReach: 11, tanken: 18, hashira: 26, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
+    // next: 疑似連 1 回 / gun: 群 / mini: ミニゲーム / miniFail: 失敗の あと 図柄が 止まるまで / charge: チャージの 変動 / sp: SPリーチごと
+    time: { next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
+        normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
 };
 
 const Show = (() => {
@@ -100,6 +145,45 @@ const Show = (() => {
         return keys[keys.length - 1];
     };
     const isHit = r => r.kind === 'hit';
+    const isBig = reach => Boolean(reach) && reach !== 'normal' && reach !== 'zenkaiten';
+    const sum = list => list.reduce((a, b) => a + b, 0);
+
+    // ミニゲームの 重み (リーチの 種類ごと)。high の ものは 熱い リーチの ときだけ
+    function miniWeights(reach) {
+        const w = {};
+        for (const [id, v] of Object.entries(SHOW.minis)) if (!v.high || SHOW.miniHigh.includes(reach)) w[id] = v.hit;
+        return w;
+    }
+    // スペックの 確率から、はずれの 変動で 出る 割合を 計算する (rel の とおりに なる ように)
+    const rateCache = new Map();
+    function rates(m) {
+        if (rateCache.has(m.specId)) return rateCache.get(m.specId);
+        const p = m.spec.hitRate, odds = p / (1 - p), R = SHOW.reaches;
+        const reachMiss = {};
+        for (const [k, v] of Object.entries(R)) reachMiss[k] = v.rel ? v.hit * odds * (1 - v.rel) / v.rel : v.miss;
+        const big = Object.keys(R).filter(isBig);
+        const mini = {};
+        for (const [id, v] of Object.entries(SHOW.minis)) {
+            const allowed = big.filter(r => miniWeights(r)[id]);
+            const hitShare = sum(allowed.map(r => R[r].hit * SHOW.miniShare * v.hit / sum(Object.values(miniWeights(r)))));
+            const win = hitShare * odds * (1 - v.rel) / v.rel;   // はずれの 変動で 成功する 割合
+            // success: SPリーチの はずれの うち この ミニゲームを とおる 割合 / fail: リーチなしの はずれで 失敗する 割合
+            mini[id] = { success: win / sum(allowed.map(r => reachMiss[r])), fail: (hitShare * odds + win) * (1 - v.win) / v.win };
+        }
+        const battleMiss = sum(SHOW.battleReaches.map(r => reachMiss[r])), battleHit = sum(SHOW.battleReaches.map(r => R[r].hit));
+        const text = {};
+        for (const [c, v] of Object.entries(SHOW.textColors)) text[c] = battleHit * v.hit * odds * (1 - v.rel) / v.rel / battleMiss;
+        const out = { reachMiss, mini, text };
+        rateCache.set(m.specId, out);
+        return out;
+    }
+    const pickText = (w, rng) => { const r = rng(); return r < w.gold ? 'gold' : r < w.gold + w.red ? 'red' : 'white'; };
+    function speech(heat, rng) {
+        const L = SHOW.lines;
+        if (rng() >= L.appear[heat]) return null;
+        const c = Number(pick(L.colorWeights[heat], rng)), list = L.text[c];
+        return { text: list[Math.floor(rng() * list.length)], color: L.colors[c] };
+    }
 
     // ----- 保留 -----
     function hold(config, m, fig, result, rng) {
@@ -156,7 +240,10 @@ const Show = (() => {
 
     function normalPlan(config, m, ctx, result, rng) {
         const hit = isHit(result);
+        const T = SHOW.time, R = rates(m);
         const p = { kind: 'normal', hit, holdColor: result.holdColor, shownColor: result.shownColor };
+        if (result.kind === 'charge') return { ...p, charge: true, next: result.next, reach: null, figures: figures(result, false, rng), duration: T.charge };
+        const holdsK = SHOW.missReachByHolds[Math.min(3, ctx.holdsLeft || 0)];
         // リーチの 種類
         let reach = null;
         if (hit) reach = pick(Object.fromEntries(Object.entries(SHOW.reaches).map(([k, v]) => [k, v.hit])), rng);
@@ -165,22 +252,45 @@ const Show = (() => {
             const r = rng();
             let acc = 0;
             // 保留の 色が 熱いほど リーチに なりやすい (見た目を 合わせる)
-            const boost = ({ white: 1, blue: 3, green: 5, red: 8, gold: 10, rainbow: 10 }[result.holdColor] || 1)
-                * SHOW.missReachByHolds[Math.min(3, ctx.holdsLeft || 0)];
-            for (const [k, v] of Object.entries(SHOW.reaches)) {
-                acc += v.miss * boost;
+            const boost = { white: 1, blue: 3, green: 5, red: 8, gold: 10, rainbow: 10 }[result.holdColor] || 1;
+            for (const k of Object.keys(SHOW.reaches)) {
+                acc += R.reachMiss[k] * holdsK * (SHOW.reaches[k].rel ? 1 : boost);
                 if (r < acc) { reach = k; break; }
             }
         }
-        if (result.holdColor === 'rainbow') reach = reach === 'zenkaiten' ? reach : 'kanezu';
+        if (result.holdColor === 'rainbow') reach = reach === 'zenkaiten' ? reach : 'hashiraAll';
         if (result.forceReach) reach = result.forceReach;
+        // ミニゲーム: 成功なら リーチへ、失敗なら はずれ
+        let mini = null;
+        if (result.forceMini) {
+            mini = { id: result.forceMini, win: hit || result.forceMiniWin !== false };
+            if (!mini.win) reach = null;
+            else if (!isBig(reach)) reach = 'harigeneral';
+        } else if (hit) {
+            if (isBig(reach) && rng() < SHOW.miniShare) mini = { id: pick(miniWeights(reach), rng), win: true };
+        } else if (isBig(reach)) {
+            const r = rng();
+            let acc = 0;
+            for (const id of Object.keys(miniWeights(reach))) {
+                acc += R.mini[id].success;
+                if (r < acc) { mini = { id, win: true }; break; }
+            }
+        } else if (!reach) {
+            const r = rng();
+            let acc = 0;
+            for (const id of Object.keys(SHOW.minis)) {
+                acc += R.mini[id].fail * holdsK;
+                if (r < acc) { mini = { id, win: false }; break; }
+            }
+        }
         p.reach = reach;
+        p.mini = mini;
         p.figures = figures(result, Boolean(reach), rng);
         if (reach === 'zenkaiten') p.figures = [7, 7, 7];
         // 演出の 部品
         const P = SHOW.parts;
         const roll = (o) => rng() < (hit ? o.hit : o.miss);
-        const big = reach && reach !== 'normal' && reach !== 'zenkaiten';
+        const big = isBig(reach);
         p.gun = big && (result.forceGun !== undefined ? result.forceGun : roll(P.gun));
         p.yaku = Boolean(result.forceYaku) || (big && roll(P.yaku));
         if (reach && reach !== 'zenkaiten') {
@@ -197,14 +307,32 @@ const Show = (() => {
             }
             if (hit && p.yaku) p.action = p.action || 'push';
         }
+        if (big) p.chance = rng() < (hit ? P.chance.hit : P.chance.miss);
+        // 柱の氷リーチは かならず さいごに「レバーを引け！」
+        if (reach === 'hashiraAll') { p.action = 'lever'; p.leverText = 'レバーを引け！'; p.cutin = null; p.chance = false; }
+        // 敵の カットインの 文字の 色
+        if (SHOW.battleReaches.includes(reach)) {
+            const w = hit ? { gold: SHOW.textColors.gold.hit, red: SHOW.textColors.red.hit } : R.text;
+            p.textColor = result.forceText || pickText(w, rng);
+        }
+        // 疑似連
+        p.gizi = 0;
+        if (mini || big) p.gizi = Number(pick(SHOW.gizi[hit ? 'hit' : big ? 'reach' : 'fail'], rng));
+        if (result.forceGizi !== undefined) p.gizi = result.forceGizi;
+        // セリフ
+        const heat = result.holdColor === 'rainbow' ? 6 : hit ? 5 : big ? 3 : reach ? 2 : mini ? 1 : 0;
+        p.line = speech(heat, rng);
         // 当たりの ときの 告知: 役物が 落ちる (yaku) か、決め手の あとに 当たり
-        const T = SHOW.time;
-        p.duration = !reach ? SHOW.plainByHolds[Math.min(3, ctx.holdsLeft || 0)]
+        // 図柄が 止まりはじめる 前の 時間 (lead): 疑似連 → 群 → ミニゲーム。t はそれぞれの はじまる 秒
+        p.t = { gizi: 0.6 };
+        p.t.gun = p.t.gizi + p.gizi * T.next;
+        p.t.mini = p.t.gun + (p.gun ? T.gun : 0);
+        p.lead = p.t.mini + (mini ? T.mini : 0) - 0.6;
+        p.duration = p.lead + (!reach ? (mini ? T.miniFail : SHOW.plainByHolds[Math.min(3, ctx.holdsLeft || 0)])
             : reach === 'normal' ? T.normalReach
             : reach === 'tanken' ? T.tanken
             : reach === 'zenkaiten' ? T.zenkaiten
-            : T.hashira;
-        if (p.gun) p.duration += 2.5;
+            : T.sp[reach]);
         if (big) p.enemy = reach === 'tanken' ? 'rival' : reach;
         // 当たりの 次: ST / 時短 (液晶で 見せる)
         p.next = hit ? result.next : null;
@@ -228,6 +356,7 @@ const Show = (() => {
         const action = hit ? (rng() < 0.35 ? 'lever' : 'push') : (rng() < 0.03 ? 'lever' : 'push');
         return {
             kind: 'battle', hit, enemy, enemyName: e.name, kill: e.kill, chance, action,
+            textColor: result.forceText || pickText(SHOW.battleText[hit ? 'hit' : 'st'], rng),
             yaku: hit && rng() < 0.15,
             figures: hit ? [7, 7, 7] : [1, 2, 3],
             duration: T.battle + (chance ? 1 : 0)
@@ -258,7 +387,8 @@ const Show = (() => {
         const shuketsu = result.forceShuketsu !== undefined ? result.forceShuketsu : rng() < H.shuketsu[hit ? 0 : 1];
         const enemies = shuketsu ? ['haru', 'okadishi', 'kanezu'] : [['haru', 'okadishi', 'kanezu'][Math.floor(rng() * 3)]];
         const ichigeki = result.forceAttack ? result.forceAttack === 'ichigeki' : rng() < H.ichigeki[hit ? 0 : 1];
-        return { ...base, sub: 'battle', ally, enemies, shuketsu, attack: ichigeki ? 'ichigeki' : 'rengeki', action: ichigeki ? 'lever' : 'mash', duration: T.hBattle + (shuketsu ? 1.5 : 0) };
+        const textColor = result.forceText || pickText(SHOW.battleText[hit ? 'hit' : 'hst'], rng);
+        return { ...base, sub: 'battle', textColor, ally, enemies, shuketsu, attack: ichigeki ? 'ichigeki' : 'rengeki', action: ichigeki ? 'lever' : 'mash', duration: T.hBattle + (shuketsu ? 1.5 : 0) };
     }
 
     // 時短: はやい 変動。当たりは リーチ
@@ -279,6 +409,6 @@ const Show = (() => {
     // ST の 相手の、出たときの 撃破率 (表示・テスト用)
     function killRate(enemy) { return SHOW.enemies[enemy].kill; }
 
-    return { hold, plan, stepStory, killRate, battleEnemy };
+    return { hold, plan, stepStory, killRate, battleEnemy, rates };
 })();
 if (typeof module !== 'undefined') module.exports = { SHOW, Show };

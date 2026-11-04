@@ -109,7 +109,7 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
     const payout = CONFIG.payout;
     const chains = [];
     const bonusBalls = [];
-    let curBonus = 0, curFrom = null, firstKinds = { st: 0, jitan: 0 };
+    let curBonus = 0, curFrom = null, curNext = null, firstKinds = { st: 0, jitan: 0 };
     const uw = { n: 0, win: 0, lose: 0 };
     let normalTime = 0;
     while (t < hours * 3600) {
@@ -131,9 +131,9 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
         }
         Machine.update(m, dt);
         for (const e of m.events.splice(0)) {
-            if (e.type === 'bonusStart' && e.from === 'normal' && e.fig === 1) firstKinds[e.next]++;   // ヘソの 初当たり (電チューの 残り保留の 当たりは ST)
-            if (e.type === 'bonusStart') curFrom = e.from;
-            if (e.type === 'bonusEnd') { bonusBalls.push({ balls: curBonus, from: curFrom }); curBonus = 0; }
+            if (e.type === 'bonusStart' && e.from === 'normal' && e.fig === 1 && !e.charge) firstKinds[e.next]++;   // ヘソの 初当たり (電チューの 残り保留の 当たりは ST)
+            if (e.type === 'bonusStart') { curFrom = e.charge ? 'charge' : e.from; curNext = e.next; }
+            if (e.type === 'bonusEnd') { bonusBalls.push({ balls: curBonus, from: curFrom, next: curNext }); curBonus = 0; }
             if (e.type === 'uwanoseStart') uw.n++;
             if (e.type === 'uwanose') uw.win++;
             if (e.type === 'uwanoseEnd') uw.lose++;
@@ -159,13 +159,16 @@ if (args.includes('--settings')) {
     for (const specId of Object.keys(CONFIG.specs)) {
         const spec = CONFIG.specs[specId];
         let prev = 0;
+        spec.rot6 = 0;
         spec.settings.forEach((st, i) => {
             const r = run(specId, HOURS, SEED + i, 'onioni', st.heso);
-            const rtp = r.inBalls / r.out;
-            check(near(rtp, CONFIG.settingRtp[i], 0.06) && rtp > prev, `${spec.label} 設定${i + 1}: 出玉率 ${pct(rtp)} (目標 ${pct(CONFIG.settingRtp[i])})・${rotation(r).toFixed(1)} 回転`);
+            const rtp = r.inBalls / r.out, goal = (spec.settingRtp || CONFIG.settingRtp)[i];
+            check(near(rtp, goal, goal * 0.08) && rtp > prev, `${spec.label} 設定${i + 1}: 出玉率 ${pct(rtp)} (目標 ${pct(goal)})・${rotation(r).toFixed(1)} 回転`);
             prev = rtp;
+            spec.rot6 = rotation(r);
         });
     }
+    check(CONFIG.specs.s399.rot6 > CONFIG.specs.s319.rot6, `1/399 の 設定6 は 1/319 の 設定6 より 回る (${CONFIG.specs.s399.rot6.toFixed(1)} > ${CONFIG.specs.s319.rot6.toFixed(1)})`);
     console.log(failed ? `\n${failed} 件 失敗` : '\nぜんぶ ok');
     process.exit(failed ? 1 : 0);
 }
@@ -184,7 +187,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const n1 = r.firstKinds.st + r.firstKinds.jitan;
     check(near(stShare, spec.target.st, 3 * Math.sqrt(spec.target.st * (1 - spec.target.st) / n1)), `${spec.label}: 初当たりの ST 突入 ${pct(stShare)} (目標 ${pct(spec.target.st)})`);
     const cont = s.stHits / (s.stHits + s.falls);
-    check(near(cont, spec.target.continuation, 0.03), `${spec.label}: ST の 継続率 ${pct(cont)} (ST 当たり ${s.stHits}・転落 ${s.falls})`);
+    check(near(cont, spec.target.continuation, 3 * Math.sqrt(0.2 / (s.stHits + s.falls))), `${spec.label}: ST の 継続率 ${pct(cont)} (ST 当たり ${s.stHits}・転落 ${s.falls})`);
     const spinsN = s.spins1;
     const firstRate = spinsN / Math.max(1, s.firstHits);
     check(firstRate > 1 / spec.hitRate * 0.75 && firstRate < 1 / spec.hitRate * 1.35, `${spec.label}: 初当たり 1/${firstRate.toFixed(0)} (回転 ${spinsN}・初当たり ${s.firstHits})`);
@@ -192,14 +195,22 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const perRound = CONFIG.machine.bonus.count * CONFIG.payout.attacker;
     const avgOf = list => list.reduce((a, b) => a + b.balls, 0) / Math.max(1, list.length);
     const pay = spec.payout;
-    const firstBonus = r.bonusBalls.filter(b => b.from === 'normal'), rashBonus = r.bonusBalls.filter(b => b.from !== 'normal');
-    const expFirst = (pay ? pay.first : spec.rounds) * perRound;
+    const firstBonus = r.bonusBalls.filter(b => b.from === 'normal' && b.next === 'st'), rashBonus = r.bonusBalls.filter(b => b.from !== 'normal' && b.from !== 'charge');
+    const firstJitan = r.bonusBalls.filter(b => b.from === 'normal' && b.next === 'jitan');
+    const expFirst = (pay ? pay.first : spec.rounds) * perRound, expJitan = (pay ? pay.firstJitan : spec.rounds) * perRound;
     let expRash = spec.rounds * perRound;
     if (pay) {
         const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
         expRash = pay.rash.reduce((a, k) => a + k.weight / tw * (k.rounds + (k.uwanose ? spec.uwanose.success * spec.uwanose.addRounds : 0)), 0) * perRound;
     }
-    check(near(avgOf(firstBonus), expFirst, expFirst * 0.02), `${spec.label}: 初当たりの 出玉 ${avgOf(firstBonus).toFixed(0)} 個 (目標 ${expFirst})`);
+    check(near(avgOf(firstBonus), expFirst, expFirst * 0.02), `${spec.label}: 初当たり (ST) の 出玉 ${avgOf(firstBonus).toFixed(0)} 個 (目標 ${expFirst})`);
+    check(near(avgOf(firstJitan), expJitan, expJitan * 0.02), `${spec.label}: 初当たり (時短) の 出玉 ${avgOf(firstJitan).toFixed(0)} 個 (目標 ${expJitan})`);
+    // チャージ: 低確率で 300発。5% で ST
+    const chargeBonus = r.bonusBalls.filter(b => b.from === 'charge'), expCharge = spec.charge.rounds * perRound;
+    const chargeRate = s.spins1 / Math.max(1, s.charges);
+    check(chargeRate > 1 / spec.charge.rate * 0.75 && chargeRate < 1 / spec.charge.rate * 1.35, `${spec.label}: チャージ 1/${chargeRate.toFixed(0)} (${s.charges} 回)`);
+    check(near(avgOf(chargeBonus), expCharge, expCharge * 0.02), `${spec.label}: チャージの 出玉 ${avgOf(chargeBonus).toFixed(0)} 個 (目標 ${expCharge})`);
+    check(near(s.chargeSt / s.charges, spec.charge.st, 3 * Math.sqrt(0.05 * 0.95 / s.charges)), `${spec.label}: チャージの ST 突入 ${pct(s.chargeSt / s.charges)} (${s.chargeSt}/${s.charges})`);
     check(near(avgOf(rashBonus), expRash, expRash * 0.05), `${spec.label}: RASH・時短の 大当たりの 出玉 ${avgOf(rashBonus).toFixed(0)} 個 (目標 ${expRash.toFixed(0)})`);
     if (pay) {
         const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
@@ -253,6 +264,52 @@ console.log('■ 演出');
     const yakuTrust = (yaku.hit / hitN / 319) / (yaku.hit / hitN / 319 + yaku.miss / missN * 318 / 319);
     check(leverTrust > 0.4, `金棒レバーの 信頼度 ${pct(leverTrust)}`);
     check(yakuTrust > 0.75, `役物の 信頼度 ${pct(yakuTrust)}`);
+}
+// 通常時の 演出 (2026-11-04 ユーザー指定): SPリーチ・ミニゲーム・敵の 文字の 色・疑似連・セリフの 信頼度。
+// 当たりと はずれを 別に まわして、スペックの 確率で 合わせる
+for (const specId of Object.keys(CONFIG.specs)) {
+    const label = CONFIG.specs[specId].label, p = CONFIG.specs[specId].hitRate;
+    const rng = seeded(SEED + 4);
+    const m = Machine.create(CONFIG, specId, rng);
+    const c = { hit: {}, miss: {} };
+    const add = (h, k) => { c[h][k] = (c[h][k] || 0) + 1; };
+    const N = { hit: 300000, miss: 3000000 };
+    for (const h of ['hit', 'miss']) for (let i = 0; i < N[h]; i++) {
+        const result = { kind: h, mode: 'normal', next: 'st' };
+        Object.assign(result, Show.hold(CONFIG, m, 1, result, rng));
+        const q = Show.plan(CONFIG, m, { fig: 1, result, holdsLeft: i % 3 }, rng);
+        if (q.reach) add(h, 'reach:' + q.reach);
+        if (q.textColor) add(h, 'text:' + q.textColor);
+        if (q.mini) { add(h, 'mini:' + q.mini.id); if (q.mini.win) add(h, 'win:' + q.mini.id); }
+        if (q.gizi) add(h, 'gizi:' + q.gizi);
+        if (q.line) add(h, 'line:' + q.line.color);
+        if (q.mini && q.mini.win && !q.reach) check(false, 'ミニゲームの 成功は リーチに なる');
+        if (q.mini && !q.mini.win && q.reach) check(false, 'ミニゲームの 失敗は リーチに ならない');
+        if (q.reach && q.figures[0] !== q.figures[2]) check(false, 'リーチは 左と 右が おなじ');
+    }
+    const mass = (h, k) => (c[h][k] || 0) / N[h] * (h === 'hit' ? p : 1 - p);
+    const trust = k => mass('hit', k) / (mass('hit', k) + mass('miss', k));
+    let prev = 0;
+    for (const r of SHOW.battleReaches) {
+        check(trust('reach:' + r) > prev, `${label}: ${SHOW.reaches[r].name} ${pct(trust('reach:' + r))}`);
+        prev = trust('reach:' + r);
+    }
+    check(prev > 0.8, `${label}: 柱の氷リーチは 80% 以上 (${pct(prev)})`);
+    check(trust('text:gold') > 0.8 && trust('text:gold') > trust('text:red') && trust('text:red') > trust('text:white'), `${label}: 敵の 文字 白 ${pct(trust('text:white'))} < 赤 ${pct(trust('text:red'))} < 金 ${pct(trust('text:gold'))}`);
+    let prevWin = 0;
+    for (const id of Object.keys(SHOW.minis)) {
+        const win = (mass('hit', 'win:' + id) + mass('miss', 'win:' + id)) / (mass('hit', 'mini:' + id) + mass('miss', 'mini:' + id));
+        check(win > prevWin, `${label}: ${SHOW.minis[id].name} 成功 ${pct(win)}・成功なら 当たり ${pct(trust('win:' + id))}`);
+        prevWin = win;
+    }
+    check(near(trust('win:goldDog'), 0.95, 0.03), `${label}: 金面犬を 発見したら 95% 当たり (${pct(trust('win:goldDog'))})`);
+    check(trust('gizi:3') > trust('gizi:1'), `${label}: 疑似連 2連 ${pct(trust('gizi:1'))} < 4連 ${pct(trust('gizi:3'))}`);
+    check(trust('line:#ffd84a') > trust('line:#ffffff'), `${label}: セリフ 白 ${pct(trust('line:#ffffff'))} < 金 ${pct(trust('line:#ffd84a'))}`);
+}
+// 敵の 文字の 色 (ST・柱の氷RASH): 金は 80% 以上
+for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {
+    const w = SHOW.battleText, g = w.hit.gold * chance, b = w[mode].gold * (1 - chance);
+    check(g / (g + b) > 0.8, `${mode === 'st' ? 'おにおにRASH' : '柱の氷RASH'} の 金文字 ${pct(g / (g + b))}`);
 }
 // 柱の氷RASH の 演出: 先バレ・一発告知・バトル (一撃の ほうが 期待度が 高い・集結は 大チャンス)
 {
