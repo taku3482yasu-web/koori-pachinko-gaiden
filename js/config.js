@@ -161,9 +161,10 @@ const CONFIG = {
             // 柱の氷RASH: 100 回で 当たりを ねらう (1 − (1 − 1/62.6)^100 ≒ 80%)
             hashira: { hitRate: 1 / 62.6, spins: 100 },
             target: { st: 0.5, continuation: 0.8 },
-            // 設定 1〜6 の 釘 (1000円で 約 10 〜 19 回転。RASH 中が 10R なので しめて ある)
-            settings: [{ hesoWidth: 12.5, heso: 0.04 }, { hesoWidth: 12.8, heso: 0.046 }, { hesoWidth: 13.6, heso: 0.053 },
-                { hesoWidth: 13.9, heso: 0.058 }, { hesoWidth: 14, heso: 0.062 }, { hesoWidth: 14.2, heso: 0.074 }]
+            // 設定 1〜6 の 釘 (1000円で 約 18 〜 30 回転。2026-11-04 ユーザー指定: 回転数を 優先。RASH 中が 10R なので 出玉率は 高い)
+            settings: [{ hesoWidth: 14.2, heso: 0.076 }, { hesoWidth: 14.5, heso: 0.088 }, { hesoWidth: 15, heso: 0.093 },
+                { hesoWidth: 16, heso: 0.107 }, { hesoWidth: 16.5, heso: 0.123 }, { hesoWidth: 17.5, heso: 0.146 }],
+            settingRtp: [1.22, 1.35, 1.4, 1.53, 1.66, 1.83]
         },
         s399: {
             label: '1/399', name: 'ミドルスペック',
