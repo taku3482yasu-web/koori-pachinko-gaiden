@@ -858,7 +858,7 @@ const Lcd = (() => {
             ctx.fillRect(0, 0, W, H);
             ctx.fillStyle = `rgba(255, 40, 30, ${0.4 + 0.3 * Math.sin(now * 20)})`;
             ctx.fillRect(W / 2 - gap, 0, gap * 2, H);
-            kakusei(W / 2, H + 20 - 150 * ease(e) * 0.5 - 30, 60 + 60 * e, now);
+            kakusei(W / 2, H - 4 + 60 * (1 - ease(e)), 70 + 50 * e, now);
             if (st.crackSnap) {
                 const sw = canvas.width / 2;
                 ctx.drawImage(st.crackSnap, 0, 0, sw, canvas.height, -gap, 0, W / 2, H);
