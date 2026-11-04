@@ -52,6 +52,8 @@ const Lcd = (() => {
 
     // ----- 部品 -----
     let lt = '';   // RASH の 名前の よこの 表記 (1/399 は LT)
+    const opt = { yaku: 'always', leverTap: false };   // カスタマイズ (main が setOptions で わたす)
+    const setOptions = o => Object.assign(opt, o);
     // 敵の カットインの 文字の 色 (内部の 期待度。白 < 赤 < 金)
     const enemyTextColor = (c, now) => c === 'gold' ? `hsl(${46 + Math.sin(now * 16) * 6}, 100%, 62%)` : c === 'red' ? '#ff3a4a' : '#ffffff';
     const rainbow = (now, k = 0) => `hsl(${(now * 240 + k * 40) % 360}, 95%, 62%)`;
@@ -157,6 +159,102 @@ const Lcd = (() => {
             ctx.fillStyle = '#10182a';
             ctx.fillRect(0, H - 24, W, 24);
             snow(now, 20, 6, -4, 'rgba(180,220,255,0.6)');
+        } else if (id === 'arcade') {
+            // ゲームセンター: 暗い 店内に ならぶ きょう体と ネオン
+            sky('#12082a', '#2a1048');
+            ctx.fillStyle = '#ff4ab0';
+            ctx.fillRect(0, 18, W, 2);
+            ctx.fillStyle = '#4ad8ff';
+            ctx.fillRect(0, 22, W, 1);
+            for (let i = 0; i < 7; i++) {
+                const x = 6 + i * 39;
+                ctx.fillStyle = '#1a1a34';
+                ctx.fillRect(x, 34, 32, H - 58);
+                ctx.fillStyle = `hsl(${(i * 50 + now * 40) % 360}, 80%, ${40 + 12 * Math.sin(now * 3 + i)}%)`;
+                ctx.fillRect(x + 4, 40, 24, 24);
+                ctx.fillStyle = '#c8c8e0';
+                ctx.fillRect(x + 8, 72, 3, 8);
+                ctx.fillStyle = '#ff3a4a';
+                ctx.fillRect(x + 7, 69, 5, 4);
+                ctx.fillStyle = i % 2 ? '#ffd84a' : '#4ad8ff';
+                ctx.fillRect(x + 18, 74, 4, 4);
+            }
+            ctx.fillStyle = '#2a1a44';
+            ctx.fillRect(0, H - 24, W, 24);
+        } else if (id === 'castle') {
+            // SE城: 夕やみの 石の 城
+            sky('#2a1a4a', '#c86a4a');
+            ctx.fillStyle = '#2a2438';
+            ctx.fillRect(40, 44, W - 80, H - 68);
+            for (let x = 40; x < W - 40; x += 14) ctx.fillRect(x, 38, 8, 8);
+            [[24, 26], [W / 2 - 16, 12], [W - 56, 26]].forEach(([x, y]) => {
+                ctx.fillStyle = '#34304a';
+                ctx.fillRect(x, y, 32, H - 24 - y);
+                ctx.fillStyle = '#7a2a3a';
+                ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 16, y - 16); ctx.lineTo(x + 35, y); ctx.fill();
+                ctx.fillStyle = '#ffd86a';
+                ctx.fillRect(x + 13, y + 14, 6, 9);
+            });
+            ctx.fillStyle = '#14101e';
+            ctx.fillRect(W / 2 - 14, H - 54, 28, 30);
+            ctx.fillStyle = '#3a3448';
+            ctx.fillRect(0, H - 24, W, 24);
+        } else if (id === 'forest') {
+            // 森: 雪の のこる 木立
+            sky('#0e2a2a', '#3a7a5a');
+            seed = 6;
+            for (let layer = 0; layer < 2; layer++) {
+                for (let x = -10; x < W + 10; x += 26 + layer * 8) {
+                    const h = 50 + rnd() * 34, bx = x + rnd() * 10, by = H - 22 - layer * 6;
+                    ctx.fillStyle = layer ? '#0e3a2a' : '#16523a';
+                    ctx.beginPath(); ctx.moveTo(bx - 16, by); ctx.lineTo(bx, by - h); ctx.lineTo(bx + 16, by); ctx.fill();
+                    ctx.fillStyle = '#e8f4f0';
+                    ctx.beginPath(); ctx.moveTo(bx - 5, by - h + 15); ctx.lineTo(bx, by - h); ctx.lineTo(bx + 5, by - h + 15); ctx.fill();
+                }
+            }
+            ctx.fillStyle = '#d8ece4';
+            ctx.fillRect(0, H - 24, W, 24);
+            snow(now, 24, 10, 4);
+        } else if (id === 'moon') {
+            // 満月: 大きな 月と 雪の 丘
+            sky('#04081e', '#16204a');
+            const glow = 0.18 + 0.06 * Math.sin(now * 2);
+            ctx.fillStyle = `rgba(255, 230, 150, ${glow})`;
+            ctx.beginPath(); ctx.arc(W / 2, 50, 56, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffe89a';
+            ctx.beginPath(); ctx.arc(W / 2, 50, 38, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e8cc78';
+            [[-14, -10, 7], [12, 6, 9], [-6, 16, 5]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(W / 2 + x, 50 + y, r, 0, Math.PI * 2); ctx.fill(); });
+            ctx.fillStyle = '#0c1430';
+            ctx.beginPath(); ctx.moveTo(0, H);
+            for (let x = 0; x <= W; x += 8) ctx.lineTo(x, H - 26 - Math.sin(x / 40) * 8);
+            ctx.lineTo(W, H); ctx.fill();
+            snow(now, 26, 8, 4, 'rgba(255,245,210,0.7)');
+        } else if (id === 'temple') {
+            // 柱の神殿: 虹色に 光る 氷の 柱
+            sky('#1a0a3a', '#4a2a7a');
+            for (let i = 0; i < 12; i++) {
+                const a = now * 0.5 + i / 12 * Math.PI * 2;
+                ctx.fillStyle = `hsla(${(i * 30 + now * 60) % 360}, 90%, 65%, 0.14)`;
+                ctx.beginPath(); ctx.moveTo(W / 2, 30);
+                ctx.lineTo(W / 2 + Math.cos(a) * 300, 30 + Math.sin(a) * 300);
+                ctx.lineTo(W / 2 + Math.cos(a + 0.26) * 300, 30 + Math.sin(a + 0.26) * 300);
+                ctx.fill();
+            }
+            ctx.fillStyle = '#e8e0ff';
+            ctx.beginPath(); ctx.moveTo(30, 28); ctx.lineTo(W / 2, 4); ctx.lineTo(W - 30, 28); ctx.fill();
+            ctx.fillRect(30, 28, W - 60, 6);
+            for (let i = 0; i < 5; i++) {
+                const x = 42 + i * 44;
+                const g = ctx.createLinearGradient(x, 0, x + 16, 0);
+                g.addColorStop(0, '#6a8ae0'); g.addColorStop(0.5, '#e8f4ff'); g.addColorStop(1, '#6a5ad0');
+                ctx.fillStyle = g;
+                ctx.fillRect(x, 34, 16, H - 58);
+            }
+            ctx.fillStyle = '#c8b8f0';
+            ctx.fillRect(16, H - 24, W - 32, 6);
+            ctx.fillStyle = '#2a1a4a';
+            ctx.fillRect(0, H - 18, W, 18);
         } else if (id === 'ruins') {
             // イシイーの 遺跡: 石の かべ
             sky('#2a2010', '#5a4420');
@@ -325,7 +423,7 @@ const Lcd = (() => {
             a.count = (a.count || 0) + 1;
             return true;
         }
-        if (a.kind !== kind && !(a.kind === 'push' && kind === 'lever')) return false;
+        if (a.kind !== kind && !(a.kind === 'push' && kind === 'lever') && !(a.kind === 'lever' && kind === 'push' && opt.leverTap)) return false;
         a.done = true;
         a.doneAt = st.now;
         return true;
@@ -464,7 +562,11 @@ const Lcd = (() => {
             st.gimStarted = false;
             st.hashiraFlash = false;
             if (e.plan.yaku && e.plan.kind === 'normal') st.gimPlanned = true;
-            if (e.plan.story !== undefined) st.storyChange = { start: st.now, story: e.plan.story };
+            if (e.plan.story !== undefined) {
+                const s = SHOW.stories[e.plan.story];
+                banner(s.name, null, e.plan.story === 5 ? 'rainbow' : e.plan.story === 4 ? '#ffe89a' : '#ffffff', e.plan.story >= 4 ? 2.4 : 1.2);
+                st.flash = e.plan.story >= 4 ? 0.9 : 0.4;
+            }
         } else if (e.type === 'spinEnd') {
             st.last = { plan: e.plan, result: e.result, at: st.now };
         } else if (e.type === 'bonusStart') {
@@ -499,6 +601,10 @@ const Lcd = (() => {
             st.lastRash = e.rash;
         } else if (e.type === 'stEnd') {
             st.fallen = { start: st.now, chain: e.chain, rash: e.rash };
+        } else if (e.type === 'yutime') {
+            banner('遊タイム 突入！', `${e.at} 回転 はまった`, 'rainbow', 3);
+        } else if (e.type === 'jitanStart' && m.stats.yutimes && m.normalSpins >= (m.spec.yutime ? m.spec.yutime.at : Infinity)) {
+            // 遊タイムの 知らせを 出して いる
         } else if (e.type === 'jitanStart') {
             banner('時短 100回', 'あたれば ST「おにおにの挑戦」！', '#7ad8ff', 2.5);
         } else if (e.type === 'jitanEnd') {
@@ -515,7 +621,8 @@ const Lcd = (() => {
         }
     }
 
-    function startGimmick(kind, dur) {
+    function startGimmick(kind, dur, force = false) {
+        if (!force && (opt.yaku === 'off' || (opt.yaku === 'sometimes' && Math.random() > 0.3))) return;
         st.gim = { kind, start: st.now, dur };
     }
     function gimmick() {
@@ -605,11 +712,11 @@ const Lcd = (() => {
         const walk = Math.floor(now * 3);
         const x = 30 + ((now * 10) % 40);
         Art.draw(ctx, 'onioni', x, H - 18, { height: 22, frame: walk, flip: Math.floor(now / 4) % 2 === 1 });
-        if (story >= 2) {
+        if (story === 1 || story === 3) {
             Art.draw(ctx, 'okagappa', W - 46, H - 18, { height: 22, frame: walk });
             Art.draw(ctx, 'hibikimakuri', W - 26, H - 18, { height: 22, frame: walk + 1 });
         }
-        if (story === 3) {
+        if (story === 5) {
             Art.draw(ctx, 'kanezu', W / 2, 40, { height: 26, frame: walk, alpha: 0.35 });
         }
     }
@@ -629,11 +736,12 @@ const Lcd = (() => {
         const reach = plan.reach, lead = plan.lead || 0, t = plan.t || {};
         const big = reach && reach !== 'normal' && reach !== 'zenkaiten';
         const staged = reach || lead;
-        const tL = staged ? 1.0 + lead : D * 0.45, tR = staged ? 1.7 + lead : D * 0.65;
-        const tC = reach ? D - 0.7 : D - 0.25;
+        const end = plan.stopAt || D;   // 1・3・5・後告知・一発告知は 止まった あとに 知らせる
+        const tL = staged ? 1.0 + lead : end * 0.45, tR = staged ? 1.7 + lead : end * 0.65;
+        const tC = reach ? D - 0.7 : end - 0.25;
         // 止まる 順は 左 → 右 → まんなか (2026-11-04 ユーザー指定: まんなかを さいごに して リーチの 結果を かくす)
         const stopped = [el >= tL, el >= tC, el >= tR];
-        const figs = plan.figures;
+        const figs = plan.fake && el < end + 0.8 ? plan.fake : plan.figures;
         const sceneStart = tR + 0.9;
         const inScene = big && el >= sceneStart && el < D - 0.7;
 
@@ -644,15 +752,17 @@ const Lcd = (() => {
             reels(SMALL, figs, [1, 0, 1], now, { speed: 10 });
         } else if (reach === 'zenkaiten' && el >= 1.0) {
             background('bonus', now);
-            const k = el - 1.0;
-            const n = k < D - 3 ? (Math.floor(k * 3) % 9) + 1 : 7;
+            const n = figs[0], z = SHOW.zenkaiten[plan.zenkaiten];
             reels(BIG, [n, n, n], [1, 1, 1], now, { gold: true });
-            text('全回転', W / 2, 12, 12, 'rainbow', 'center', { bold: true });
+            text(z ? `${z.name} 全回転` : '全回転', W / 2, 12, 12, 'rainbow', 'center', { bold: true });
         } else {
             background(modeBg(m), now);
             header(m, now);
             if (!big) idleCast(m, now);
-            reels(BIG, figs, stopped, now, { bounce: stopped.map((s, i) => (s ? (el - [tL, tC, tR][i]) * 4 : 0)) });
+            const odd = el < 0.9 ? plan.iwakan : null;   // 違和感
+            reels(BIG, figs, stopped, now, { bounce: stopped.map((s, i) => (s ? (el - [tL, tC, tR][i]) * 4 : 0)), speed: odd === 'reverse' ? -14 : odd === 'stop' && el > 0.3 ? 0.001 : undefined });
+            if (odd === 'noise') for (let i = 0; i < 30; i++) { ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#444455'; ctx.fillRect(Math.random() * W, Math.random() * H, 4 + Math.random() * 40, 1); }
+            if (odd === 'lamp' && Math.floor(now * 14) % 2) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, W - 4, H - 4); }
             if (reach && stopped[2] && !stopped[1]) {
                 text('リーチ', W / 2, 24, 14, Math.floor(now * 6) % 2 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
                 if (reach === 'normal') {
@@ -663,9 +773,26 @@ const Lcd = (() => {
             }
             // 群 (ふぶきの 中を ライバル探検隊が かけぬける)
             if (plan.gun && el > t.gun && el < t.gun + SHOW.time.gun + 0.4) drawGun(el - t.gun, now);
+            if (plan.step && el >= t.step && el < t.gizi) drawStep(plan.step, el - t.step, now);
             if (plan.gizi && el >= t.gizi && el < t.gun) drawNext(el - t.gizi, now);
             else if (plan.gizi && el < tR) text(`疑似${plan.gizi + 1}連`, 6, 18, 9, plan.gizi >= 3 ? 'rainbow' : plan.gizi === 2 ? '#ff6a8a' : '#7fd3f7', 'left', { bold: true });
-            drawLine(plan.line, el, now);
+            if (!plan.step || el >= t.gizi) drawLine(plan.line, el, now);
+            if (plan.sango && el >= end) {
+                // 1・3・5 そろい: 当たり確定で RASH へ
+                if (!st.gimStarted) { st.gimStarted = true; st.flash = 1; st.shake = 0.8; startGimmick('pillars', 3.2); }
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(0, 96, W, 38);
+                text('1・3・5 そろい！', W / 2, 106, 15, 'rainbow', 'center', { bold: true });
+                text('当たり確定！ RASH へ！', W / 2, 124, 11, '#ffd84a', 'center', { bold: true });
+            }
+            if (plan.post && el >= end) {
+                if (!st.gimStarted) { st.gimStarted = true; st.flash = 1; }
+                text('後告知！！', W / 2, 18, 18, 'rainbow', 'center', { bold: true });
+            }
+            if (plan.oneshot && el >= 0.5) {
+                if (!st.gimStarted) { st.gimStarted = true; st.flash = 1; st.shake = 0.5; }
+                text('一発告知！！', W / 2, 18, 18, 'rainbow', 'center', { bold: true });
+            }
             if (plan.charge && el >= tC) {
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
                 ctx.fillRect(0, H / 2 - 20, W, 40);
@@ -679,6 +806,18 @@ const Lcd = (() => {
             ctx.fillRect(0, 0, W, H);
         }
         holds(m, now);
+    }
+
+    // ステップアップ予告 (前作から): キャラが 1 段ずつ 出る。3 段目の 文字が 赤なら チャンス・金なら 約 90%
+    function drawStep(s, k, now) {
+        const kind = SHOW.stepUp.kinds[s.kind], T = SHOW.stepUp.time;
+        const n = Math.min(s.step, Math.floor(k / T) + 1);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 26, W, 84);
+        for (let i = 0; i < n; i++) Art.draw(ctx, kind.who[i], 56 + i * 80, 92, { height: 54, frame: Math.floor(now * 5) + i });
+        const color = n === 3 ? enemyTextColor(s.color, now) : '#ffffff';
+        text(`STEP ${n}`, 8, 34, 9, '#7ad8ff', 'left', { bold: true });
+        text(kind.text[n - 1], W / 2, 102, 12, color, 'center', { bold: true });
     }
 
     // 疑似連: NEXT で 図柄が 回り直す
@@ -1039,9 +1178,9 @@ const Lcd = (() => {
                 text(`${st.ending.chain}連中`, W / 2, 88, 12, '#ffd84a', 'center');
                 if (hashira) ['haru', 'okadishi', 'kanezu'].forEach((id, i) => Art.draw(ctx, id, W - 90 + i * 30, H - 10, { height: 34, frame: Math.floor(now * 4) + i }));
                 else Art.draw(ctx, 'onioni', 40, H - 10, { height: 44, frame: Math.floor(now * 4) });
-            } else if (st.ending.charge) {
+            } else if (st.ending.next === 'normal') {
                 background('jitan', now);
-                text('チャージ 終了', W / 2, 52, 18, '#7ad8ff', 'center', { bold: true });
+                text(st.ending.charge ? 'チャージ 終了' : '大当たり 終了', W / 2, 52, 18, '#7ad8ff', 'center', { bold: true });
                 text('左打ちに もどしてね', W / 2, 76, 10, '#ffffff');
             } else {
                 background('jitan', now);
@@ -1067,7 +1206,7 @@ const Lcd = (() => {
             reels({ y: 70, size: 44 + Math.sin(el * 6) * 2, gap: 62 }, fig, [1, 1, 1], now, { gold: true });
             text('大当たり', W / 2, 18, 18 * (0.6 + 0.4 * ease(el * 2)), 'rainbow', 'center', { bold: true });
             const odd = fig[0] % 2 === 1;
-            if (b.from === 'normal') text(odd ? 'ST 確定！' : '時短 チャンス', W / 2, 122, 11, odd ? '#ff6a8a' : '#7ad8ff', 'center', { bold: true });
+            if (b.from === 'normal') text(odd ? 'ST 確定！' : b.next === 'normal' ? '' : '時短 チャンス', W / 2, 122, 11, odd ? '#ff6a8a' : '#7ad8ff', 'center', { bold: true });
             else if (b.from === 'st') text(`${b.chain}連 撃破！`, W / 2, 122, 11, '#ffd84a', 'center', { bold: true });
             // 出玉 (1/399): 3000発 / 1500発
             if (b.payKind) text(`${b.rounds * 150}発`, W / 2, 108, 12, b.rounds >= 20 ? 'rainbow' : '#ffffff', 'center', { bold: true });
@@ -1288,5 +1427,5 @@ const Lcd = (() => {
     // 早送り・テスト用
     function debug() { return st; }
 
-    return { init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
+    return { setOptions, init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
 })();

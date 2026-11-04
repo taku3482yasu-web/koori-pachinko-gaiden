@@ -51,7 +51,9 @@ const Machine = (() => {
             parts: { denchu: false, attacker: false },
             story: 0,                // 通常時の ストーリーの すすみ (演出。Show.stepStory)
             normalSpins: 0,          // 通常時の 回転数 (当たりで 0)
-            stats: { spins1: 0, spins2: 0, firstHits: 0, charges: 0, chargeSt: 0, stEntries: 0, jitanEntries: 0, jitanHits: 0, stHits: 0, falls: 0, hstEntries: 0, hstHits: 0, hstEnds: 0, bonusRounds: 0, bestChain: 0 },
+            storySpins: 6,           // 背景が かわってからの 回転数
+            fx: {},                  // カスタマイズ (先読み・告知・ふるカワ。演出の 見え方だけ)
+            stats: { spins1: 0, spins2: 0, firstHits: 0, charges: 0, chargeSt: 0, yutimes: 0, stEntries: 0, jitanEntries: 0, jitanHits: 0, stHits: 0, falls: 0, hstEntries: 0, hstHits: 0, hstEnds: 0, bonusRounds: 0, bestChain: 0 },
             events: []
         };
     }
@@ -138,8 +140,15 @@ const Machine = (() => {
             if (m.mode === 'normal') {
                 m.normalSpins++;
                 if (typeof Show !== 'undefined' && fig === 1) {
+                    m.storySpins++;
                     const story = Show.stepStory(m.config, m, result, m.rng);
-                    if (story !== null) { m.story = story; plan.story = story; }
+                    if (story !== null) {
+                        // 満月・柱の神殿から もどる ときは「背景が かわった」に 数えない
+                        plan.fastStage = m.storySpins <= 5 && m.story < 4 && story < 4;
+                        m.storySpins = m.story >= 4 ? 6 : 0;
+                        m.story = story;
+                        plan.story = story;
+                    }
                 }
             }
             if (jitan && m.jitanLeft <= 0) m.mode = 'jitanLast';   // 最後の 1 回 (止まるまで 電サポ)
@@ -166,8 +175,17 @@ const Machine = (() => {
         }
         else if (m.mode === 'jitanLast') {
             m.mode = 'normal';
+            m.normalSpins = 0;
             emit(m, 'jitanEnd', { chain: m.chain });
             endChain(m);
+        }
+        else if (m.mode === 'normal' && m.spec.yutime && m.normalSpins >= m.spec.yutime.at) {
+            // 遊タイム
+            m.stats.yutimes++;
+            m.mode = 'jitan';
+            m.jitanLeft = m.spec.jitanSpins;
+            emit(m, 'yutime', { at: m.spec.yutime.at });
+            emit(m, 'jitanStart', { spins: m.jitanLeft, chain: m.chain });
         }
     }
 
@@ -203,7 +221,7 @@ const Machine = (() => {
         m.jitanLeft = 0;
         let rounds = m.spec.rounds, payKind = null, uwanose = null;
         const pay = m.spec.payout;
-        if (pay && from === 'normal') { rounds = result.next === 'st' ? pay.first : pay.firstJitan; payKind = 'first'; }
+        if (pay && from === 'normal') { rounds = result.next === 'st' ? pay.first : pay.firstNormal; payKind = 'first'; }
         else if (pay) {
             const k = (result.forcePay && pay.rash.find(x => x.id === result.forcePay)) || weightedPick(pay.rash, m.rng);
             rounds = k.rounds;
@@ -263,7 +281,7 @@ const Machine = (() => {
             emit(m, 'roundEnd', { round: b.round, count: b.count });
             if (b.round >= b.rounds && !(b.uwanose && b.uwanose.phase === 'time')) {
                 b.phase = 'ending';
-                b.timer = b.charge && b.next !== 'st' ? cfg.chargeEnding : cfg.ending;
+                b.timer = b.next === 'normal' ? cfg.chargeEnding : cfg.ending;
                 if (b.charge && b.next === 'st') {
                     m.stats.chargeSt++;
                     m.chain = 1;
@@ -301,7 +319,8 @@ const Machine = (() => {
                 } else m.mode = 'st';
                 emit(m, 'stStart', { chain: m.chain, entry: !inRash, rash: m.rashType, spins: m.stLeft });
             } else if (b.next === 'normal') {
-                m.mode = 'normal';   // チャージの おわり
+                m.mode = 'normal';   // チャージ・時短なしの 当たりの おわり
+                if (!b.charge) endChain(m);
                 emit(m, 'chargeEnd', {});
             } else {
                 m.stats.jitanEntries++;
@@ -395,6 +414,8 @@ const Machine = (() => {
         if (options.textColor) result.forceText = options.textColor;
         if (options.gizi !== undefined) result.forceGizi = options.gizi;
         addShow(m, fig, result);
+        if (options.sango) Object.assign(result, { sango: true, next: 'st', holdColor: 'white', shownColor: 'white' });
+        if (options.step) result.forceStep = options.step;
         if (options.holdColor) result.holdColor = result.shownColor = options.holdColor;
         if (options.senbare) result.senbare = options.senbare;
         if (options.pay) result.forcePay = options.pay;
@@ -412,6 +433,13 @@ const Machine = (() => {
         else { m.mode = 'jitan'; m.jitanLeft = m.spec.jitanSpins; emit(m, 'jitanStart', { spins: m.jitanLeft, chain: m.chain }); }
     }
 
-    return { create, enter, update, aim, support, setRashType, snapshot, restore, debugHold, debugMode, weightedPick };
+    // 背景を かえる (デバッグ用)
+    function debugStory(m, story) {
+        m.story = story;
+        m.storySpins = 0;
+        emit(m, 'storyChange', { story });
+    }
+
+    return { debugStory, create, enter, update, aim, support, setRashType, snapshot, restore, debugHold, debugMode, weightedPick };
 })();
 if (typeof module !== 'undefined') module.exports = { Machine };

@@ -109,7 +109,9 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
     const payout = CONFIG.payout;
     const chains = [];
     const bonusBalls = [];
-    let curBonus = 0, curFrom = null, curNext = null, firstKinds = { st: 0, jitan: 0 };
+    let curBonus = 0, curFrom = null, curNext = null, firstKinds = { st: 0, jitan: 0, normal: 0 };
+    const stage = { moon: 0, moonHit: 0, temple: 0, templeHit: 0, fast: 0, fastHit: 0 };
+    let watch = [];   // 背景が 出た あと 5 回転の あいだに 当たるか
     const uw = { n: 0, win: 0, lose: 0 };
     let normalTime = 0;
     while (t < hours * 3600) {
@@ -138,9 +140,15 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
             if (e.type === 'uwanose') uw.win++;
             if (e.type === 'uwanoseEnd') uw.lose++;
             if (e.type === 'chainEnd') chains.push(e.chain);
+            if (e.type === 'spinStart' && e.mode === 'normal') {
+                watch = watch.filter(w => m.stats.spins1 <= w.until);
+                const p = e.plan, kind = p.story === 4 ? 'moon' : p.story === 5 ? 'temple' : p.fastStage ? 'fast' : null;
+                if (kind) { stage[kind]++; watch.push({ kind, until: m.stats.spins1 + 5 }); }
+            }
+            if (e.type === 'bonusStart' && e.from === 'normal' && !e.charge) { watch.forEach(w => stage[w.kind + 'Hit']++); watch = []; }
         }
     }
-    return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime, uw };
+    return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime, uw, stage };
 }
 
 const rotation = r => r.m.stats.spins1 / (r.normalTime / CONFIG.launch.interval) * 250;
@@ -148,7 +156,7 @@ const rotation = r => r.m.stats.spins1 / (r.normalTime / CONFIG.launch.interval)
 // ----- 設定 (2026-11-04 ユーザー指定: 前作と おなじく 設定 1〜6 を 釘で つける) -----
 if (args.includes('--sweep')) {
     const list = args[args.indexOf('--sweep') + 1].split(',').map(Number);
-    for (const specId of Object.keys(CONFIG.specs)) for (const h of list) {
+    for (const specId of Object.keys(CONFIG.specs).filter(k => !args.includes('--only') || k === args[args.indexOf('--only') + 1])) for (const h of list) {
         const r = run(specId, HOURS, SEED, 'onioni', h);
         console.log(`${CONFIG.specs[specId].label} ヘソ ${h}: 出玉率 ${pct(r.inBalls / r.out)}・${rotation(r).toFixed(1)} 回転`);
     }
@@ -183,8 +191,8 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const spec = CONFIG.specs[specId];
     const r = run(specId, HOURS, SEED);
     const s = r.m.stats;
-    const stShare = r.firstKinds.st / (r.firstKinds.st + r.firstKinds.jitan);
-    const n1 = r.firstKinds.st + r.firstKinds.jitan;
+    const n1 = r.firstKinds.st + r.firstKinds.jitan + r.firstKinds.normal;
+    const stShare = r.firstKinds.st / n1;
     check(near(stShare, spec.target.st, 3 * Math.sqrt(spec.target.st * (1 - spec.target.st) / n1)), `${spec.label}: 初当たりの ST 突入 ${pct(stShare)} (目標 ${pct(spec.target.st)})`);
     const cont = s.stHits / (s.stHits + s.falls);
     check(near(cont, spec.target.continuation, 3 * Math.sqrt(0.2 / (s.stHits + s.falls))), `${spec.label}: ST の 継続率 ${pct(cont)} (ST 当たり ${s.stHits}・転落 ${s.falls})`);
@@ -196,8 +204,8 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const avgOf = list => list.reduce((a, b) => a + b.balls, 0) / Math.max(1, list.length);
     const pay = spec.payout;
     const firstBonus = r.bonusBalls.filter(b => b.from === 'normal' && b.next === 'st'), rashBonus = r.bonusBalls.filter(b => b.from !== 'normal' && b.from !== 'charge');
-    const firstJitan = r.bonusBalls.filter(b => b.from === 'normal' && b.next === 'jitan');
-    const expFirst = (pay ? pay.first : spec.rounds) * perRound, expJitan = (pay ? pay.firstJitan : spec.rounds) * perRound;
+    const firstJitan = r.bonusBalls.filter(b => b.from === 'normal' && b.next !== 'st');
+    const expFirst = (pay ? pay.first : spec.rounds) * perRound, expJitan = (pay ? pay.firstNormal : spec.rounds) * perRound;
     let expRash = spec.rounds * perRound;
     if (pay) {
         const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
@@ -215,12 +223,17 @@ for (const specId of Object.keys(CONFIG.specs)) {
     if (pay) {
         const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
         const share = r.uw.n / rashBonus.length, expShare = pay.rash.filter(k => k.uwanose).reduce((a, k) => a + k.weight, 0) / tw;
-        check(near(share, expShare, 0.05), `${spec.label}: 上乗せタイムの 発生 ${pct(share)} (目標 ${pct(expShare)})`);
-        check(r.uw.win + r.uw.lose === r.uw.n && near(r.uw.win / r.uw.n, spec.uwanose.success, 0.06), `${spec.label}: 上乗せタイムの 成功 ${pct(r.uw.win / r.uw.n)} (${r.uw.win}/${r.uw.n})`);
+        check(near(share, expShare, 3 * Math.sqrt(0.25 / r.uw.n)), `${spec.label}: 上乗せタイムの 発生 ${pct(share)} (目標 ${pct(expShare)})`);
+        check(r.uw.win + r.uw.lose === r.uw.n && near(r.uw.win / r.uw.n, spec.uwanose.success, 3 * Math.sqrt(0.25 / r.uw.n)), `${spec.label}: 上乗せタイムの 成功 ${pct(r.uw.win / r.uw.n)} (${r.uw.win}/${r.uw.n})`);
         const counts = {};
         rashBonus.forEach(b => { counts[b.balls] = (counts[b.balls] || 0) + 1; });
         console.log(`      RASH・時短の 出玉: ${Object.entries(counts).map(([k, v]) => `${k}個 ${pct(v / rashBonus.length)}`).join('・')}`);
     }
+    const g = r.stage;
+    check(g.temple > 0 && g.templeHit === g.temple, `${spec.label}: 柱の神殿は 当たり確定 (${g.templeHit}/${g.temple})`);
+    check(g.moon > 0 && g.moonHit / g.moon > 0.9, `${spec.label}: 満月 ${pct(g.moonHit / g.moon)} (${g.moonHit}/${g.moon})`);
+    check(g.fast > 0 && g.fastHit / g.fast > 0.85, `${spec.label}: 背景の 連続変化 ${pct(g.fastHit / g.fast)} (${g.fastHit}/${g.fast})`);
+    if (!spec.firstHit.some(x => x.next === 'jitan')) check(s.jitanEntries === 0, `${spec.label}: 初当たりの 時短なし`);
     const avgChain = r.chains.reduce((a, b) => a + b, 0) / r.chains.length;
     const perFirst = r.bonusBalls.reduce((a, b) => a + b.balls, 0) / r.chains.length;
     console.log(`      平均 連チャン ${avgChain.toFixed(2)} 回・初当たり 1 回の 出玉 ${perFirst.toFixed(0)} 個・最高 ${s.bestChain} 連・時短で 引き戻し ${s.jitanHits}/${s.jitanEntries}`);
@@ -252,6 +265,7 @@ console.log('■ 演出');
         const hit = i % 50 === 0;
         const result = { kind: hit ? 'hit' : 'miss', mode: 'normal', next: 'st' };
         Object.assign(result, Show.hold(CONFIG, m, 1, result, rng));
+        if (result.sango) { hitN++; hitReach++; continue; }
         const p = Show.plan(CONFIG, m, { fig: 1, result, holdsLeft: 0 }, rng);
         if (hit) { hitN++; if (p.reach) hitReach++; if (p.action === 'lever') lever.hit++; if (p.yaku) yaku.hit++; }
         else { missN++; if (p.reach) missReach++; if (p.action === 'lever') lever.miss++; if (p.yaku) yaku.miss++; }
@@ -277,7 +291,11 @@ for (const specId of Object.keys(CONFIG.specs)) {
     for (const h of ['hit', 'miss']) for (let i = 0; i < N[h]; i++) {
         const result = { kind: h, mode: 'normal', next: 'st' };
         Object.assign(result, Show.hold(CONFIG, m, 1, result, rng));
+        if (result.sango) { add(h, 'sango'); continue; }
         const q = Show.plan(CONFIG, m, { fig: 1, result, holdsLeft: i % 3 }, rng);
+        if (q.figures.join() === '1,3,5') check(false, 'はずれは 1・3・5 に ならない');
+        if (q.step) add(h, 'step:' + q.step.id);
+        if (q.iwakan) add(h, 'iwakan');
         if (q.reach) add(h, 'reach:' + q.reach);
         if (q.textColor) add(h, 'text:' + q.textColor);
         if (q.mini) { add(h, 'mini:' + q.mini.id); if (q.mini.win) add(h, 'win:' + q.mini.id); }
@@ -303,8 +321,40 @@ for (const specId of Object.keys(CONFIG.specs)) {
         prevWin = win;
     }
     check(near(trust('win:goldDog'), 0.95, 0.03), `${label}: 金面犬を 発見したら 95% 当たり (${pct(trust('win:goldDog'))})`);
+    check(trust('step:s3gold') > 0.85 && trust('step:s3gold') > trust('step:s3red') && trust('step:s3red') > trust('step:s3'), `${label}: ステップアップ 3 段 白 ${pct(trust('step:s3'))} < 赤 ${pct(trust('step:s3red'))} < 金 ${pct(trust('step:s3gold'))}`);
+    check(trust('iwakan') > 0.6, `${label}: 違和感 ${pct(trust('iwakan'))}`);
     check(trust('gizi:3') > trust('gizi:1'), `${label}: 疑似連 2連 ${pct(trust('gizi:1'))} < 4連 ${pct(trust('gizi:3'))}`);
     check(trust('line:#ffd84a') > trust('line:#ffffff'), `${label}: セリフ 白 ${pct(trust('line:#ffffff'))} < 金 ${pct(trust('line:#ffd84a'))}`);
+}
+// 1・3・5 そろい: 当たり確定で RASH へ・先読みなし
+{
+    const m = Machine.create(CONFIG, 's399', seeded(SEED + 5));
+    Machine.debugHold(m, 'hit', { next: 'st', sango: true });
+    const h = m.holds[1][0];
+    check(h.shownColor === 'white' && h.holdColor === 'white', '1・3・5 は 保留が 白');
+    const p = Show.plan(CONFIG, m, { fig: 1, result: h, holdsLeft: 0 }, m.rng);
+    check(p.figures.join() === '1,3,5' && p.hit && !p.step && !p.line && !p.gizi && !p.reach && !p.mini, '1・3・5 は 予告なしで 当たり');
+    check(Show.stepStory(CONFIG, m, h, () => 0) === null, '1・3・5 は 背景が かわらない');
+    let toSt = false;
+    for (let i = 0; i < 60 * 60 * 3 && !toSt; i++) {
+        Machine.update(m, 1 / 30);
+        if (m.parts.attacker) Machine.enter(m, 'attacker');
+        for (const e of m.events.splice(0)) if (e.type === 'stStart') toSt = true;
+    }
+    check(toSt, '1・3・5 の あとは RASH');
+}
+// 遊タイム: 天井まで まわすと 時短
+{
+    for (const specId of Object.keys(CONFIG.specs)) {
+        const spec = CONFIG.specs[specId], m = Machine.create(CONFIG, specId, () => 0.999);
+        let at = 0;
+        for (let i = 0; i < spec.yutime.at * 12 * 10 && !at; i++) {
+            if (m.holds[1].length < 2 && m.mode === 'normal') Machine.enter(m, 'heso');
+            Machine.update(m, 1 / 10);
+            for (const e of m.events.splice(0)) if (e.type === 'yutime') at = m.stats.spins1;
+        }
+        check(at === spec.yutime.at && m.mode === 'jitan', `${spec.label}: 遊タイムは ${spec.yutime.at} 回転で 時短 (${at} 回転)`);
+    }
 }
 // 敵の 文字の 色 (ST・柱の氷RASH): 金は 80% 以上
 for (const [mode, chance] of [['st', 0.8], ['hst', 0.1]]) {

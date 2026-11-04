@@ -134,7 +134,7 @@ const Bgm = (() => {
         if (m.mode === 'st') return 'st';
         if (m.mode === 'hst') return 'hashira';
         if (m.mode === 'jitan' || m.mode === 'jitanLast') return 'jitan';
-        if (m.story === 3) return 'hideout';
+        if (m.story >= 4) return 'hideout';
         return 'normal';
     }
 

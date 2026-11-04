@@ -30,6 +30,7 @@
                 <span id="spec-display" class="spec-display"></span>
                 <span class="bar-buttons">
                     <button id="sound-button" class="small-button">音: ON</button>
+                    <button id="customize-button" class="small-button">カスタマイズ</button>
                     <button id="machine-button" class="small-button">台選び</button>
                     <button id="taizen-button" class="small-button" type="button" title="ゲーム大全に もどる" onclick="if (confirm('ゲーム大全に もどる？')) location.href = 'https://taku3482yasu-web.github.io/koori-game-taizen/'">🏠 大全</button>
                 </span>
@@ -65,6 +66,7 @@
             <div class="menu-row">
                 <button id="lend-button" class="lend-button">玉貸し（+125発）</button>
                 <button id="data-button" class="small-button">データ</button>
+                <button id="collection-button" class="small-button">図鑑</button>
                 <button id="debug-button" class="small-button">デバッグ</button>
                 <a href="howto.html" class="small-button link-button">遊び方</a>
             </div>
@@ -92,6 +94,23 @@
                     <option value="asahara">ASAHARA宣言</option>
                     <option value="goldDog">ゴールド金面犬発見</option>
                 </select>
+                <select id="debug-step" aria-label="ステップアップ">
+                    <option value="">ステップ: 抽選</option>
+                    <option value="s1">1 段</option>
+                    <option value="s2">2 段</option>
+                    <option value="s3">3 段 白</option>
+                    <option value="s3red">3 段 赤</option>
+                    <option value="s3gold">3 段 金</option>
+                </select>
+                <select id="debug-stage" aria-label="背景">
+                    <option value="">背景を かえる</option>
+                    <option value="0">雪が降る街</option>
+                    <option value="1">ゲームセンター</option>
+                    <option value="2">SE城</option>
+                    <option value="3">森</option>
+                    <option value="4">満月</option>
+                    <option value="5">柱の神殿</option>
+                </select>
                 <select id="debug-text" aria-label="敵の 文字の 色">
                     <option value="">文字: 抽選</option>
                     <option value="white">白</option>
@@ -108,6 +127,8 @@
                 <button id="debug-show-hit">この 内容で 当たり</button>
                 <button id="debug-show-miss">この 内容で はずれ</button>
                 <button id="debug-mini-fail">ミニゲーム 失敗</button>
+                <button id="debug-sango">次は 1・3・5</button>
+                <button id="debug-yutime">遊タイムの 手前へ</button>
                 <button id="debug-charge">次は チャージ</button>
                 <button id="debug-charge-st">次は チャージ → ST</button>
             </div>
@@ -157,13 +178,33 @@
                 </div>
             </div>
             <p class="picker-note setting-note">設定が 高いほど 釘が ひらいて よく 回る (設定1 は 負けやすく、設定6 は 大きく 勝てる)。おまかせは 設定が わからない (RASH・時短が 終わった ときの トロフィーの 色で 見やぶろう)</p>
+            <button id="continue-button" class="spec-option continue-button" hidden><span class="spec-label">前回から つづける</span></button>
             <div class="spec-options">
                 <button class="spec-option" data-spec="s319"><span class="spec-label">1/319 ライトスペック</span><span class="spec-note">大当たりは いつも 3R (約450個)。初当たりの 50% が ST、のこりは 時短100回 (あたれば ST)。ST 継続率 約80%</span></button>
-                <button class="spec-option" data-spec="s399"><span class="spec-label">1/399 ミドルスペック</span><span class="spec-note">初当たりの 50% は 3000発で RASH (LT)、のこりは 1500発で 時短100回。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。ST 継続率 約75%・出玉は こっちが 多め</span></button>
+                <button class="spec-option" data-spec="s399"><span class="spec-label">1/399 ミドルスペック</span><span class="spec-note">初当たりの 50% は 3000発で RASH (LT)、のこりは 1500発 (時短なし)。RASH 中は 3000発 25%・1500発 25%・上乗せタイム 50% (成功で +1500発)。ST 継続率 約75%・出玉は こっちが 多め</span></button>
             </div>
             <p class="picker-note">チャージ: 通常時に 低い 確率で 入る 300発。そのあいだは 右打ち。5% で ST へ。<br>ST は 2 つから えらべる (継続率は おなじ)。<br>おにおにRASH: 転落型。回数の かぎりは ないが、おにおにが たおされたら 終わり。撃破率は 相手で かわる (ハリージェネラル ＞ ヒョウガリュウ ＞ ハルゥ ＞ オカディシ ＞ カネーズ)<br>柱の氷RASH: 100回の ST。一発告知・先バレが 主役。バトルで おにおに・こおりくんが 出たら チャンス、柱の氷が 集結したら 大チャンス。一撃 (レバー) は 連撃 (ボタン連打) より 期待度が 高い</p>
         </div>
     </div>
+
+    <div id="customize-panel" class="picker" hidden>
+        <div class="picker-box">
+            <h2>カスタマイズ</h2>
+            <p class="picker-note">演出と 見た目だけ。当たりやすさは かわらない</p>
+            <div id="customize-body"></div>
+            <div class="picker-actions"><button data-close>とじる</button></div>
+        </div>
+    </div>
+
+    <div id="collection-panel" class="picker" hidden>
+        <div class="picker-box">
+            <h2>図鑑</h2>
+            <div id="collection-body"></div>
+            <div class="picker-actions"><button data-close>とじる</button></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
 
     <div id="data-panel" class="picker" hidden>
         <div class="picker-box">
@@ -176,7 +217,9 @@
     <script src="js/config.js"></script>
     <script src="js/art-legacy.js"></script>
     <script src="js/art.js"></script>
+    <script src="js/customize.js"></script>
     <script src="js/show.js"></script>
+    <script src="js/records.js"></script>
     <script src="js/machine.js"></script>
     <script src="js/physics.js"></script>
     <script src="js/board.js"></script>
