@@ -36,12 +36,12 @@
 const SHOW = {
     // ST の 相手 (2026-11-03 ユーザー指定: 撃破率が 高い 順に ハリージェネラル > ヒョウガリュウ > ハルゥ > オカディシ > カネーズ)
     enemies: {
-        harigeneral: { name: 'ハリージェネラル', stars: 5, kill: 0.95, side: 'ally', ryuha: 'はり一族の 将軍', color: '#ffd84a', intro: 'はり一族の 力を 見よ！', win: '出直してくるがよい！', lose: 'ばかな… 針が 折れた…' },
+        harigeneral: { name: 'ハリージェネラル', stars: 5, kill: 0.95, side: 'ally', ryuha: 'はり一族の 将軍', color: '#ffd84a', special: 'ハリニードル', intro: 'はり一族の 力を 見よ！', win: '出直してくるがよい！', lose: 'ばかな… 針が 折れた…' },
         hyougaryu:   { name: 'ヒョウガリュウ', stars: 4, kill: 0.85, side: 'ally', ryuha: '氷河の 竜', color: '#7ad8ff' },
-        asatana:     { name: 'アサタナ', kill: 0.6, side: 'hashira', ryuha: '柱の氷の 下っ端', color: '#a8c8e8', intro: 'ここは 通さないぞ！', win: 'へへっ ざまあみろ！', lose: 'ひいい… カネーズさま…' },
-        haru:        { name: 'ハルゥ', stars: 3, kill: 0.70, side: 'hashira', ryuha: '嵐の 流派', color: '#9cf0b0', intro: '嵐が おまえを さらう！', win: '風は わたしの みかただ', lose: '嵐が… やんだ…' },
-        okadishi:    { name: 'オカディシ', stars: 2, kill: 0.50, side: 'hashira', ryuha: '大渦の 流派', color: '#5a9cff', intro: '大渦に のまれろ！', win: 'うずの そこで ねむれ', lose: 'うずが… ほどける…' },
-        kanezu:      { name: 'カネーズ', stars: 1, kill: 0.30, side: 'hashira', ryuha: '吹雪の 流派', color: '#e0e8ff', intro: '古き しきたりに したがえ！', win: 'これが こおり一族の 力だ', lose: 'しきたりが… くずれる…' }
+        asatana:     { name: 'アサタナ', kill: 0.6, side: 'hashira', ryuha: '柱の氷の 下っ端', color: '#a8c8e8', special: 'やりつき', intro: 'ここは 通さないぞ！', win: 'へへっ ざまあみろ！', lose: 'ひいい… カネーズさま…' },
+        haru:        { name: 'ハルゥ', stars: 3, kill: 0.70, side: 'hashira', ryuha: '嵐の 流派', color: '#9cf0b0', special: '嵐旋風', intro: '嵐が おまえを さらう！', win: '風は わたしの みかただ', lose: '嵐が… やんだ…' },
+        okadishi:    { name: 'オカディシ', stars: 2, kill: 0.50, side: 'hashira', ryuha: '大渦の 流派', color: '#5a9cff', special: '大渦葬', intro: '大渦に のまれろ！', win: 'うずの そこで ねむれ', lose: 'うずが… ほどける…' },
+        kanezu:      { name: 'カネーズ', stars: 1, kill: 0.30, side: 'hashira', ryuha: '吹雪の 流派', color: '#e0e8ff', special: '絶氷の吹雪', intro: '古き しきたりに したがえ！', win: 'これが こおり一族の 力だ', lose: 'しきたりが… くずれる…' }
     },
     // 相手の 出やすさ (スペックごと)。Σ weight × kill / Σ weight = 継続率 に なる ように して ある (tools/test.js で たしかめる)
     battleWeights: {
@@ -94,6 +94,27 @@ const SHOW = {
         hashiraAll: { name: '柱の氷リーチ', hit: 0.26, rel: 0.82 },
         zenkaiten: { name: '全回転', hit: 0.02, miss: 0 }
     },
+    // SPリーチの 流れ (2026-11-04 ユーザー指定: 退屈な 時間を なくす)。beat 秒ごとに セリフと 必殺技を くりだす。リーチが 長いほど さきまで 進む
+    //   talk: セリフ (line: 敵の セリフの 名前 / text: 文字) / special: 必殺技 (move: おにおにの 技の 色)
+    spBeat: 2,
+    spScript: [
+        { kind: 'talk', who: 'enemy', line: 'intro' },
+        { kind: 'talk', who: 'oni', text: 'こおりくんを かえせ！' },
+        { kind: 'special', who: 'enemy' },
+        { kind: 'talk', who: 'oni', text: 'まだまだ！' },
+        { kind: 'special', who: 'oni', move: 'red' },
+        { kind: 'talk', who: 'enemy', text: 'やるな…！' },
+        { kind: 'special', who: 'enemy' },
+        { kind: 'special', who: 'oni', move: 'gold' }
+    ],
+    tankenLines: ['こおりくんの 足あとだ！', 'こっちだ！ いそげ！', 'なにか 光ったぞ！', 'おにおに、たのんだ！', 'もう すぐだ！', 'こおりくーん！'],
+    // 柱の氷リーチの 激闘: 2 秒ごとに だれかの 必殺技
+    hashiraFight: [
+        { who: 'haru', move: '嵐旋風', color: '#0e4a34' }, { who: 'onioni', move: '鬼鬼ラッシュ', color: '#6a0a18' },
+        { who: 'okadishi', move: '大渦葬', color: '#123a7a' }, { who: 'okagappa', move: 'おかピポっと光線', color: '#1a4a8a' },
+        { who: 'kanezu', move: '絶氷の吹雪', color: '#3a4a6a' }, { who: 'sasaki', move: 'ASAスラッシュ', color: '#1a4a8a' },
+        { who: 'onioni', move: '鬼鬼の金棒', color: '#6a0a18' }
+    ],
     // 敵と たたかう リーチ (敵の カットインの 文字の 色が つく)
     battleReaches: ['harigeneral', 'asatana', 'haru', 'okadishi', 'kanezu', 'hashiraAll'],
     // 敵の カットインの 文字の 色 (2026-11-04 ユーザー指定: 内部の 期待度で かわる。ふだんは 白)。
@@ -230,8 +251,8 @@ const SHOW = {
     // next: 疑似連 1 回 / gun: 群 / mini: ミニゲーム / miniFail: 失敗の あと 図柄が 止まるまで / charge: チャージの 変動 / sp: SPリーチごと
     // crack: 1・3・5 の あとの 流れ (秒)。ひび → 究極形態が 出る → 画面を 粉砕 → 咆哮 → おめでとう！
     crack: { crack: 1.5, emerge: 3.7, smash: 4.7, roar: 6.9, end: 9.5 },
-    time: { sango: 14, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
-        normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stJoin: 3.2, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hFlash: 4.6, hBattle: 11 }
+    time: { sango: 14, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 18, asatana: 19, haru: 21, okadishi: 22, kanezu: 24, hashiraAll: 30 },
+        normalReach: 8, tanken: 14, zenkaiten: 14, stMiss: 1.8, stJoin: 3.2, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hFlash: 4.6, hBattle: 11 }
 };
 
 const Show = (() => {
