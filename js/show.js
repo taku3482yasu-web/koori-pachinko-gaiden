@@ -9,7 +9,9 @@
 //   ライバル探検隊と 合流 → 柱の氷 (ハルゥ・オカディシ・カネーズ) と たたかう
 //   背景 (2026-11-04 ユーザー指定): 雪が降る街・ゲームセンター・SE城・森。満月は 90% 以上、柱の神殿は 当たり確定 (保留に 当たりが ある ときに 出る)。
 //     背景が かわって 5 回転 以内に また かわれば 当たり濃厚 (stepStory)
-//   1・3・5 そろい (2026-11-04 ユーザー指定): 当たり確定で RASH へ。先読みも 予告も 出ない (result.sango)
+//   1・3・5 そろい (2026-11-04 ユーザー指定): 当たり確定で RASH へ。先読みも 予告も 出ない (result.sango)。ひび割れ → おにおにの 究極形態 → 咆哮 → おめでとう！
+//   昇格チャレンジ (2026-11-04 ユーザー指定): 偶数図柄の 当たりの あと、おにおに vs こおりくんの 影。ゲージの 色は 青 < 緑 < 紫 < 赤 < 虹 (虹は 確定)・レバーは 確定。
+//     ST へ 行く 当たりの 約 6 割が とおる (result.promo)。のこりは 奇数図柄で そのまま RASH
 //   変動の 流れ (2026-11-04 ユーザー指定): セリフ → ステップアップ予告 → 疑似連 (NEXT) → 群 → ミニゲーム → 失敗なら はずれ / 成功なら リーチ → SPリーチ → 撃破で 当たり
 //   リーチ: ノーマル → 探検隊リーチ → SPリーチ (ハリージェネラル < アサタナ < ハルゥ < オカディシ < カネーズ) → 柱の氷リーチ (3 人 同時。80% 以上)
 //   ミニゲーム (成功度の 低い 順): おかもぅダッシュ < イシイー遺跡チャレンジ < マッスルチャレンジ < ASAHARA宣言 < ゴールド金面犬発見チャレンジ (発見で 95% 当たり)
@@ -88,6 +90,37 @@ const SHOW = {
     miniShare: 0.7,                      // 当たりの SPリーチの うち ミニゲームを とおる 割合
     miniHigh: ['kanezu', 'hashiraAll'],
     // 疑似連 (前作と おなじ。NEXT で 図柄が 回り直す 回数の 重み)。ミニゲームか SPリーチに 入る 変動だけ
+    // 昇格チャレンジ。st: ST へ 行く 当たりの うち 偶数図柄で ここを とおる 割合 / weights: ゲージの 色の 重み (win: 成功 / lose: 失敗) / lever: 成功の ときに レバーに なる 割合
+    //   time: 液晶の 流れ (秒)。intro → charge (ためる) → decide (色が きまる) → clash (激突・ボタンか レバー) → end
+    promo: {
+        st: 0.6, lever: 0.35,
+        gauge: ['blue', 'green', 'purple', 'red', 'rainbow'],
+        names: { blue: '青', green: '緑', purple: '紫', red: '赤', rainbow: '虹' },
+        colors: { blue: '#3f8cff', green: '#3fcf5f', purple: '#a860ff', red: '#ff3a3a' },
+        weights: { win: { blue: 5, green: 10, purple: 20, red: 30, rainbow: 35 }, lose: { blue: 45, green: 30, purple: 18, red: 7, rainbow: 0 } },
+        time: { intro: 2.5, charge: 7.5, decide: 9, clash: 13, end: 15.5 }
+    },
+    // オープニング・エンディング (2026-11-04 ユーザー指定)。エンディングは 10 連目の 大当たりの あと。場面: dur 秒 / bg 背景 / who キャラ / text 文字
+    story: {
+        endingAt: 10,
+        opening: [
+            { dur: 3.5, bg: 'town', who: ['koori'], text: 'ここは 雪が 降る 街…' },
+            { dur: 2.5, bg: 'black', who: [], text: 'ある夜…' },
+            { dur: 3.5, bg: 'town', who: ['onioni'], text: 'こおりくんが いない…！！' },
+            { dur: 3.5, bg: 'tavern', who: ['onioni', 'okagappa'], text: '柱の氷が さらったと いう うわさを 耳にした' },
+            { dur: 4, bg: 'hideout', who: ['haru', 'okadishi', 'kanezu'], shadow: true, text: 'こおり一族の 悪の 一派「柱の氷」' },
+            { dur: 4, bg: 'snowfield', who: ['onioni', 'okagappa', 'hibikimakuri', 'yamamou'], text: 'ライバル探検隊と ともに 旅が はじまる！' },
+            { dur: 4.5, bg: 'battle', who: [], title: true }
+        ],
+        ending: [
+            { dur: 4, bg: 'hideout', who: ['onioni', 'haru', 'okadishi', 'kanezu'], text: '柱の氷との たたかいは ついに 決着！' },
+            { dur: 3, bg: 'black', who: [], text: '氷の おくから 声が きこえる…' },
+            { dur: 4, bg: 'hideout', who: ['koori'], text: 'こおりくんを とりもどした！！' },
+            { dur: 4, bg: 'town', who: ['koori', 'onioni'], text: 'ふたりは 雪が 降る 街へ もどった' },
+            { dur: 4.5, bg: 'town', who: ['okagappa', 'hibikimakuri', 'yamamou', 'koori', 'onioni'], text: 'ライバル探検隊も いっしょに おいわい！' },
+            { dur: 5, bg: 'bonus', who: ['koori'], end: true }
+        ]
+    },
     // 1・3・5 そろい: ST へ 行く 通常時の 当たりの うち この 割合。はずれは 1・3・5 に ならない
     sango: 0.08,
     // 背景: 満月の rel は 90% 以上 (rates が はずれの 割合を 計算する)。hitAhead は 保留に 当たりが ある 1 回転ごとの 出やすさ
@@ -167,7 +200,9 @@ const SHOW = {
     plainByHolds: [5.2, 4, 2.4, 1.4],
     missReachByHolds: [1, 1, 0.6, 0.35],
     // next: 疑似連 1 回 / gun: 群 / mini: ミニゲーム / miniFail: 失敗の あと 図柄が 止まるまで / charge: チャージの 変動 / sp: SPリーチごと
-    time: { sango: 9, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
+    // crack: 1・3・5 の あとの 流れ (秒)。ひび → 究極形態が 出る → 画面を 粉砕 → 咆哮 → おめでとう！
+    crack: { crack: 1.5, emerge: 3.7, smash: 4.7, roar: 6.9, end: 9.5 },
+    time: { sango: 14, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
         normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
 };
 
@@ -233,6 +268,8 @@ const Show = (() => {
         if (m.mode === 'st' || fig === 2) return { holdColor: 'white', shownColor: 'white' };
         // 1・3・5 そろい: 先読みなし
         if (isHit(result) && result.next === 'st' && m.mode === 'normal' && rng() < SHOW.sango) return { holdColor: 'white', shownColor: 'white', sango: true };
+        // 昇格チャレンジを とおるか (偶数図柄)。ST へ 行かない 当たりは ぜんぶ、ST へ 行く 当たりは promo.st
+        const promo = isHit(result) && m.mode === 'normal' && fig === 1 && (result.next !== 'st' || rng() < SHOW.promo.st);
         const senyomi = { none: 0, chance: 0.5, recommend: 1, hot: 1.6 }[m.fx.senyomi || 'recommend'];
         // 保留の 色: 当たりかで 出やすさが ちがう
         let color = 'white';
@@ -246,7 +283,7 @@ const Show = (() => {
         if (result.force === 'reach' && color === 'white') color = 'blue';
         // 保留変化: 白で 入って 変動の はじめに 色が かわる (ときどき)
         const shown = color !== 'white' && rng() < 0.4 ? 'white' : color;
-        return { holdColor: color, shownColor: shown };
+        return { holdColor: color, shownColor: shown, promo };
     }
 
     // ----- 変動 -----
@@ -264,7 +301,7 @@ const Show = (() => {
         if (isHit(result)) {
             // ST へ 行く 当たりは 奇数 (7 が 多い)、時短へ 行く 当たりは 偶数
             const odd = [1, 3, 5, 7, 7, 7], even = [2, 4, 6, 8];
-            const n = result.next === 'st' ? odd[Math.floor(rng() * odd.length)] : even[Math.floor(rng() * even.length)];
+            const n = result.next === 'st' && !result.promo ? odd[Math.floor(rng() * odd.length)] : even[Math.floor(rng() * even.length)];
             return [n, n, n];
         }
         if (reach) {
@@ -352,7 +389,7 @@ const Show = (() => {
         p.mini = mini;
         p.figures = figures(result, Boolean(reach), rng);
         if (reach === 'zenkaiten' && hit) {
-            const list = Object.entries(SHOW.zenkaiten).filter(([, v]) => (v.figure % 2 === 1) === (result.next === 'st'));
+            const list = Object.entries(SHOW.zenkaiten).filter(([, v]) => (v.figure % 2 === 1) === (result.next === 'st' && !result.promo));
             const [id, v] = list[Math.floor(rng() * list.length)];
             p.zenkaiten = id;
             p.figures = [v.figure, v.figure, v.figure];
@@ -500,9 +537,14 @@ const Show = (() => {
         return rng() < 1 / SHOW.storyEvery ? nextStage() : null;
     }
 
+    // 昇格チャレンジの ゲージの 色と 決め手
+    function promoPlan(win, rng) {
+        return { color: pick(SHOW.promo.weights[win ? 'win' : 'lose'], rng), action: win && rng() < SHOW.promo.lever ? 'lever' : 'push' };
+    }
+
     // ST の 相手の、出たときの 撃破率 (表示・テスト用)
     function killRate(enemy) { return SHOW.enemies[enemy].kill; }
 
-    return { hold, plan, stepStory, killRate, battleEnemy, rates };
+    return { hold, plan, stepStory, killRate, battleEnemy, rates, promoPlan };
 })();
 if (typeof module !== 'undefined') module.exports = { SHOW, Show };

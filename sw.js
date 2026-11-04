@@ -1,5 +1,5 @@
 // オフラインでも 遊べる ように (ホーム画面に 追加)。ファイルが かわったら VERSION を 上げる (tools/bump-version.sh)
-const VERSION = 'gaiden-6';
+const VERSION = 'gaiden-7';
 const FILES = ['./', 'index.html', 'howto.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon-192.png',
     'js/config.js', 'js/art-legacy.js', 'js/art.js', 'js/customize.js', 'js/show.js', 'js/records.js', 'js/machine.js', 'js/physics.js', 'js/board.js',
     'js/render.js', 'js/lcd.js', 'js/cabinet.js', 'js/sound-heso.js', 'js/audio.js', 'js/bgm.js', 'js/main.js'];

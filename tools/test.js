@@ -110,6 +110,7 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
     const chains = [];
     const bonusBalls = [];
     let curBonus = 0, curFrom = null, curNext = null, firstKinds = { st: 0, jitan: 0, normal: 0 };
+    const promoSt = { n: 0, promo: 0, ends: 0, wins: 0 };
     const stage = { moon: 0, moonHit: 0, temple: 0, templeHit: 0, fast: 0, fastHit: 0 };
     let watch = [];   // 背景が 出た あと 5 回転の あいだに 当たるか
     const uw = { n: 0, win: 0, lose: 0 };
@@ -136,6 +137,8 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
             if (e.type === 'bonusStart' && e.from === 'normal' && e.fig === 1 && !e.charge) firstKinds[e.next]++;   // ヘソの 初当たり (電チューの 残り保留の 当たりは ST)
             if (e.type === 'bonusStart') { curFrom = e.charge ? 'charge' : e.from; curNext = e.next; }
             if (e.type === 'bonusEnd') { bonusBalls.push({ balls: curBonus, from: curFrom, next: curNext }); curBonus = 0; }
+            if (e.type === 'bonusStart' && e.from === 'normal' && e.fig === 1 && !e.charge && e.next === 'st') { promoSt.n++; if (e.promo) promoSt.promo++; }
+            if (e.type === 'promoEnd') { promoSt.ends++; if (e.win) promoSt.wins++; }
             if (e.type === 'uwanoseStart') uw.n++;
             if (e.type === 'uwanose') uw.win++;
             if (e.type === 'uwanoseEnd') uw.lose++;
@@ -148,7 +151,7 @@ function run(specId, hours, seed, rash = 'onioni', heso = hesoRate(specId)) {
             if (e.type === 'bonusStart' && e.from === 'normal' && !e.charge) { watch.forEach(w => stage[w.kind + 'Hit']++); watch = []; }
         }
     }
-    return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime, uw, stage };
+    return { m, out, inBalls, chains, bonusBalls, firstKinds, normalTime, uw, stage, promoSt };
 }
 
 const rotation = r => r.m.stats.spins1 / (r.normalTime / CONFIG.launch.interval) * 250;
@@ -229,6 +232,9 @@ for (const specId of Object.keys(CONFIG.specs)) {
         rashBonus.forEach(b => { counts[b.balls] = (counts[b.balls] || 0) + 1; });
         console.log(`      RASH・時短の 出玉: ${Object.entries(counts).map(([k, v]) => `${k}個 ${pct(v / rashBonus.length)}`).join('・')}`);
     }
+    const ps = r.promoSt;
+    check(near(ps.promo / ps.n, 0.6 * (1 - SHOW.sango), 3 * Math.sqrt(0.25 / ps.n)), `${spec.label}: RASH へ 行く 当たりの 昇格チャレンジ経由 ${pct(ps.promo / ps.n)} (${ps.promo}/${ps.n})`);
+    check(ps.wins === ps.promo && ps.ends === ps.wins + r.firstKinds.jitan + r.firstKinds.normal, `${spec.label}: 昇格チャレンジの 成否は 当たりの ときに きまる (成功 ${ps.wins}/${ps.ends})`);
     const g = r.stage;
     check(g.temple > 0 && g.templeHit === g.temple, `${spec.label}: 柱の神殿は 当たり確定 (${g.templeHit}/${g.temple})`);
     check(g.moon > 0 && g.moonHit / g.moon > 0.9, `${spec.label}: 満月 ${pct(g.moonHit / g.moon)} (${g.moonHit}/${g.moon})`);
@@ -342,6 +348,28 @@ for (const specId of Object.keys(CONFIG.specs)) {
         for (const e of m.events.splice(0)) if (e.type === 'stStart') toSt = true;
     }
     check(toSt, '1・3・5 の あとは RASH');
+}
+// 昇格チャレンジ: 虹ゲージと レバーは 確定・奇数図柄と 1・3・5 は とおらない
+{
+    const rng = seeded(SEED + 6);
+    let rainbowLose = 0, leverLose = 0, leverWin = 0;
+    for (let i = 0; i < 20000; i++) {
+        const lose = Show.promoPlan(false, rng), win = Show.promoPlan(true, rng);
+        if (lose.color === 'rainbow') rainbowLose++;
+        if (lose.action === 'lever') leverLose++;
+        if (win.action === 'lever') leverWin++;
+    }
+    check(rainbowLose === 0 && leverLose === 0 && leverWin > 0, '昇格チャレンジ: 虹ゲージと レバーは 確定');
+    const m = Machine.create(CONFIG, 's399', rng);
+    let bad = 0;
+    for (let i = 0; i < 5000; i++) {
+        const result = { kind: 'hit', mode: 'normal', next: i % 2 ? 'st' : 'normal' };
+        Object.assign(result, Show.hold(CONFIG, m, 1, result, rng));
+        if (result.sango) continue;
+        const even = Show.plan(CONFIG, m, { fig: 1, result, holdsLeft: 0 }, rng).figures[0] % 2 === 0;
+        if (even !== Boolean(result.promo)) bad++;
+    }
+    check(bad === 0, '昇格チャレンジは 偶数図柄だけ');
 }
 // 遊タイム: 天井まで まわすと 時短
 {

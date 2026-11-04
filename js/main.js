@@ -60,6 +60,7 @@
         game.record.plays++;
         store.set('record', game.record);
         const force = saved ? null : params.get('force');
+        if (!saved && !params.has('spec') && Customize.get('opening') === 'on') Lcd.playStory('opening');
         const opt = {
             next: force === 'hitJitan' ? 'jitan' : 'st', enemy: params.get('enemy'), yaku: params.get('yaku') === '1',
             reach: params.get('reach') || undefined, gun: params.has('gun') ? params.get('gun') === '1' : undefined,
@@ -67,7 +68,7 @@
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
             pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
             mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
-            gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', step: params.get('step') || undefined
+            gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', promo: params.has('promo') ? params.get('promo') === '1' : undefined, step: params.get('step') || undefined
         };
         if (force === 'st' || force === 'jitan' || force === 'hst') Machine.debugMode(game.machine, force);
         else if (force === 'stHit' || force === 'fall') { Machine.debugMode(game.machine, 'st'); Machine.debugHold(game.machine, force === 'fall' ? 'fall' : 'hit', opt); }
@@ -112,6 +113,7 @@
         const m = game.machine;
         if (time >= game.nextSave) { game.nextSave = time + 5; saveGame(); }
         if (game.pushAt !== null && time - game.pushAt > 0.7) skipSpin(m);
+        Lcd.setHolding(game.pushAt !== null);
         const aim = Machine.aim(m);
         if (game.auto) game.strength = CONFIG.launch.presets[aim];
         if ((game.fireOn || game.holding || game.auto) && time >= game.nextShot && game.balls > 0 && game.world.balls.length < CONFIG.ball.maxBalls) {
@@ -162,7 +164,7 @@
         else if (e.type === 'spinEnd') { if (e.result.kind === 'hit') Sound.play('win'); }
         else if (e.type === 'bonusStart') {
             Sound.play(e.charge ? 'chance' : 'fanfare');
-            if (e.next === 'st' && !e.charge) openRashChoice();
+            if (e.next === 'st' && !e.charge && !e.promo) openRashChoice();
             if (e.from === 'normal' && !e.charge) { game.record.firstHits++; game.chainStartBalls = game.balls; }
             Records.add(e.charge ? 'charges' : 'hits');
             game.history.unshift({ kind: e.charge ? 'チャージ' : e.from === 'normal' ? '初当たり' : 'RASH', rounds: e.rounds, spins: m.normalSpins, chain: e.chain });
@@ -175,7 +177,15 @@
         else if (e.type === 'iwakan') { Sound.play('iwakan'); Sound.hush(900); }
         else if (e.type === 'uwanose') { Sound.play('gekiha'); Sound.play('fanfare'); }
         else if (e.type === 'uwanoseEnd') Sound.play('lose');
-        else if (e.type === 'bonusEnd') closeRashChoice();
+        else if (e.type === 'promoStart') { Sound.play('chance'); schedulePromo(e.promo); }
+        else if (e.type === 'promoEnd') {
+            if (e.win) { openRashChoice(); Records.add('promoWins'); }
+        }
+        else if (e.type === 'bonusEnd') {
+            closeRashChoice();
+            // エンディング: RASH 10 連目の あと
+            if (m.chain === SHOW.story.endingAt) { Lcd.playStory('ending', m.chain); Sound.play('fanfare'); Records.add('endings'); }
+        }
         else if (e.type === 'stStart' && e.entry) { Sound.play('stIn'); Records.add('entries'); }
         else if (e.type === 'yutime') { Sound.play('stIn'); Records.add('yutimes'); }
         else if (e.type === 'stEnd') { Sound.play('fall'); settingHint(); }
@@ -211,6 +221,15 @@
         if (plan.reach && plan.reach !== 'normal' && Customize.get('leverBuru') === 'on' && Math.random() < (plan.hit ? 0.3 : 0.02)) vibrate('lever');
     }
 
+    function schedulePromo(promo) {
+        const T = SHOW.promo.time, at = (t, name) => cues.push({ t: time + t, name });
+        cues = [];
+        at(T.charge, promo.color === 'rainbow' ? 'win' : 'chance');
+        at(T.decide, 'cutin');
+        at(T.decide + 1.2, promo.action === 'lever' ? 'vibrateLever' : 'clash');
+        at(T.clash, promo.win ? 'gekiha' : 'lose');
+    }
+
     // 変動の なかの 音 (時間で 鳴らす)
     let cues = [];
     function schedule(plan, D) {
@@ -223,6 +242,15 @@
             if (plan.mini) {
                 at(t.mini, 'challenge');
                 at(t.mini + SHOW.time.mini - 1.4, plan.mini.win ? 'success' : 'fail');
+            }
+            if (plan.sango) {
+                const c = SHOW.crack, s = plan.stopAt;
+                at(s, 'crack');
+                at(s + c.crack, 'cutin');
+                at(s + c.emerge, 'smash');
+                at(s + c.smash, 'roar');
+                at(s + c.smash, 'vibratePush');
+                at(s + c.roar, 'win');
             }
             if (plan.reach) at(1.7 + g, 'reach');
             if (plan.reach === 'hashiraAll') {
@@ -263,6 +291,7 @@
         while (cues.length && cues[0].t <= time) {
             const name = cues.shift().name;
             if (name === 'vibratePush') vibrate('push');
+            else if (name === 'vibrateLever') vibrate('lever');
             else Sound.play(name);
         }
     }
@@ -322,6 +351,7 @@
     // PUSH / 金棒レバー
     function push() {
         Sound.unlock();
+        if (Lcd.storyActive()) { Lcd.storySkip(); return; }
         if (Lcd.prompt() === 'mash') { if (Lcd.input('push')) Sound.play('clash'); }
         else if (Lcd.input('push')) { Sound.play('push'); Sound.play('chance'); }
         else Sound.play('push');
@@ -385,10 +415,11 @@
 
     // 液晶の ズーム (可動液晶: バトル・大きい リーチ・大当たりの はじめに 前へ せり出す)
     function zoomTarget(m) {
-        if (m.bonus && m.bonus.phase === 'opening') return 1;
+        if (Lcd.storyActive() || (m.bonus && (m.bonus.phase === 'opening' || m.bonus.phase === 'promo'))) return 1;
         const sp = m.spin;
         if (!sp) return 0;
         const p = sp.plan;
+        if (p.sango && sp.elapsed >= p.stopAt) return 1;
         if (p.kind === 'battle' && sp.elapsed > 1 && sp.elapsed < sp.duration - 0.2) return 1;
         if (p.kind === 'hashira' && p.sub !== 'quick' && sp.elapsed > 0.8 && sp.elapsed < sp.duration - 0.2) return 1;
         if (p.kind === 'normal' && p.reach && p.reach !== 'normal' && p.reach !== 'zenkaiten' && sp.elapsed > 3 + (p.lead || 0)) return 1;
@@ -403,7 +434,11 @@
         last = now;
         if (!game.paused && game.machine) {
             const dt = 1 / 60;
-            while (acc >= dt) { tick(dt); acc -= dt; }
+            while (acc >= dt) {
+                // オープニング・エンディングの あいだは 台を 止める
+                if (Lcd.storyActive()) time += dt; else tick(dt);
+                acc -= dt;
+            }
             playCues();
             const m = game.machine;
             const z = zoomTarget(m) * (Customize.get('lcdZoom') === 'on' && Customize.get('fx') !== 'quiet' ? 1 : 0);
@@ -553,6 +588,10 @@
         $('debug-show-hit').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', ...staged() }));
         $('debug-show-miss').addEventListener('click', () => Machine.debugHold(game.machine, 'reach', staged()));
         $('debug-mini-fail').addEventListener('click', () => Machine.debugHold(game.machine, 'miss', { ...staged(), mini: $('debug-mini').value || 'okamou', miniWin: false, reach: undefined }));
+        $('debug-promo-win').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', promo: true, ...staged() }));
+        $('debug-promo-lose').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: game.machine.spec.firstHit[1].next, promo: true, ...staged() }));
+        $('debug-opening').addEventListener('click', () => Lcd.playStory('opening'));
+        $('debug-ending').addEventListener('click', () => Lcd.playStory('ending', 10));
         $('debug-sango').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', sango: true }));
         $('debug-stage').addEventListener('change', e => { if (e.target.value !== '') Machine.debugStory(game.machine, Number(e.target.value)); });
         $('debug-yutime').addEventListener('click', () => { if (game.machine.spec.yutime) game.machine.normalSpins = game.machine.spec.yutime.at; });

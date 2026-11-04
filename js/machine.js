@@ -8,6 +8,8 @@
 //           大当たり → ラウンドの あと また ST / 転落 → 通常時へ (おにおにが たおされる)
 //   大当たりは spec.rounds ラウンド (1/319 は いつも 3R)。spec.payout が ある 台 (1/399) は 初当たり 20R・RASH 中は 振り分け、
 //   上乗せタイム (spec.uwanose) が 成功すると ラウンドが ふえる (できごと uwanoseStart → iwakan → uwanose / uwanoseEnd)
+//   昇格チャレンジ (2026-11-04 ユーザー指定): 通常時の ヘソの 偶数図柄の 当たりの あと (result.promo)。結果は 当たりの ときに きまっている (result.next === 'st' なら 成功)。
+//     さいごの ラウンドの あとに phase 'promo'。成功なら RASH へ (1/399 は 1500発 → 3000発に 昇格して ラウンドが ふえる)
 //   チャージ (2026-11-04 ユーザー指定。spec.charge): 通常時の ヘソの 低確率の 当たり (result.kind 'charge')。300発 (2R) を 右打ちで。spec.charge.st (5%) で ST、のこりは 通常時へ (回転数・連チャンは そのまま)
 //   ST は 2 つ (2026-11-04 ユーザー指定)。ST に 入る 大当たりの あいだに えらぶ (m.rashType。Machine.setRashType):
 //     おにおにRASH ('onioni'。mode 'st'): 上の 転落型
@@ -53,7 +55,7 @@ const Machine = (() => {
             normalSpins: 0,          // 通常時の 回転数 (当たりで 0)
             storySpins: 6,           // 背景が かわってからの 回転数
             fx: {},                  // カスタマイズ (先読み・告知・ふるカワ。演出の 見え方だけ)
-            stats: { spins1: 0, spins2: 0, firstHits: 0, charges: 0, chargeSt: 0, yutimes: 0, stEntries: 0, jitanEntries: 0, jitanHits: 0, stHits: 0, falls: 0, hstEntries: 0, hstHits: 0, hstEnds: 0, bonusRounds: 0, bestChain: 0 },
+            stats: { spins1: 0, spins2: 0, firstHits: 0, promos: 0, promoWins: 0, charges: 0, chargeSt: 0, yutimes: 0, stEntries: 0, jitanEntries: 0, jitanHits: 0, stHits: 0, falls: 0, hstEntries: 0, hstHits: 0, hstEnds: 0, bonusRounds: 0, bestChain: 0 },
             events: []
         };
     }
@@ -219,9 +221,17 @@ const Machine = (() => {
         m.stats.bestChain = Math.max(m.stats.bestChain, m.chain);
         m.mode = 'bonus';
         m.jitanLeft = 0;
-        let rounds = m.spec.rounds, payKind = null, uwanose = null;
+        let rounds = m.spec.rounds, payKind = null, uwanose = null, promo = null;
         const pay = m.spec.payout;
-        if (pay && from === 'normal') { rounds = result.next === 'st' ? pay.first : pay.firstNormal; payKind = 'first'; }
+        if (from === 'normal' && fig === 1 && result.promo && typeof Show !== 'undefined') {
+            const win = result.next === 'st';
+            promo = { ...Show.promoPlan(win, m.rng), win, extra: 0, done: false };
+        }
+        if (pay && from === 'normal') {
+            rounds = result.next === 'st' && !promo ? pay.first : pay.firstNormal;
+            if (promo && promo.win) promo.extra = pay.first - pay.firstNormal;
+            payKind = 'first';
+        }
         else if (pay) {
             const k = (result.forcePay && pay.rash.find(x => x.id === result.forcePay)) || weightedPick(pay.rash, m.rng);
             rounds = k.rounds;
@@ -235,9 +245,9 @@ const Machine = (() => {
                 };
             }
         }
-        m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.opening, next: result.next, from, fig, payKind, uwanose };
+        m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.opening, next: result.next, from, fig, payKind, uwanose, promo };
         m.stats.bonusRounds += rounds;
-        emit(m, 'bonusStart', { rounds, next: result.next, from, chain: m.chain, fig, plan: result.plan || null, payKind });
+        emit(m, 'bonusStart', { rounds, next: result.next, from, chain: m.chain, fig, plan: result.plan || null, payKind, promo: Boolean(promo) });
     }
 
     // チャージ: 初当たりには 数えない。ST へ 行くときは ending で 連チャンを はじめる
@@ -271,6 +281,18 @@ const Machine = (() => {
         }
     }
 
+    function toEnding(m, b, cfg) {
+        b.phase = 'ending';
+        b.timer = b.next === 'normal' ? cfg.chargeEnding : cfg.ending;
+        if (b.charge && b.next === 'st') {
+            m.stats.chargeSt++;
+            m.chain = 1;
+            m.normalSpins = 0;
+            m.stats.bestChain = Math.max(m.stats.bestChain, 1);
+        }
+        emit(m, 'ending', { next: b.next, chain: m.chain, from: b.from, charge: Boolean(b.charge) });
+    }
+
     function updateBonus(m, dt) {
         const cfg = m.config.machine.bonus;
         const b = m.bonus;
@@ -280,15 +302,12 @@ const Machine = (() => {
             if (b.count < cfg.count && b.timer > 0) return;
             emit(m, 'roundEnd', { round: b.round, count: b.count });
             if (b.round >= b.rounds && !(b.uwanose && b.uwanose.phase === 'time')) {
-                b.phase = 'ending';
-                b.timer = b.next === 'normal' ? cfg.chargeEnding : cfg.ending;
-                if (b.charge && b.next === 'st') {
-                    m.stats.chargeSt++;
-                    m.chain = 1;
-                    m.normalSpins = 0;
-                    m.stats.bestChain = Math.max(m.stats.bestChain, 1);
-                }
-                emit(m, 'ending', { next: b.next, chain: m.chain, from: b.from, charge: Boolean(b.charge) });
+                if (b.promo && !b.promo.done) {
+                    b.phase = 'promo';
+                    b.timer = cfg.promo;
+                    m.stats.promos++;
+                    emit(m, 'promoStart', { promo: b.promo });
+                } else toEnding(m, b, cfg);
             } else {
                 b.phase = 'interval';
                 b.timer = cfg.interval;
@@ -296,6 +315,18 @@ const Machine = (() => {
             return;
         }
         if (b.timer > 0) return;
+        if (b.phase === 'promo') {
+            b.promo.done = true;
+            if (b.promo.win) m.stats.promoWins++;
+            emit(m, 'promoEnd', { win: b.promo.win, extra: b.promo.extra });
+            if (b.promo.win && b.promo.extra) {
+                b.rounds += b.promo.extra;
+                m.stats.bonusRounds += b.promo.extra;
+                b.phase = 'interval';
+                b.timer = cfg.interval;
+            } else toEnding(m, b, cfg);
+            return;
+        }
         if (b.phase === 'opening' || b.phase === 'interval') {
             b.round++;
             b.count = 0;
@@ -416,6 +447,7 @@ const Machine = (() => {
         addShow(m, fig, result);
         if (options.sango) Object.assign(result, { sango: true, next: 'st', holdColor: 'white', shownColor: 'white' });
         if (options.step) result.forceStep = options.step;
+        if (options.promo !== undefined && result.kind === 'hit') result.promo = options.promo;
         if (options.holdColor) result.holdColor = result.shownColor = options.holdColor;
         if (options.senbare) result.senbare = options.senbare;
         if (options.pay) result.forcePay = options.pay;
