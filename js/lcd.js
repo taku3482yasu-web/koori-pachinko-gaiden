@@ -599,6 +599,7 @@ const Lcd = (() => {
             st.crackSmash = false;
             st.holdPrompt = false;
             st.reviveFlash = false;
+            st.gimWin = false;
             if (e.plan.yaku && e.plan.kind === 'normal') st.gimPlanned = true;
             if (e.plan.story !== undefined) {
                 const s = SHOW.stories[e.plan.story];
@@ -615,7 +616,7 @@ const Lcd = (() => {
             st.ending = null;
             st.flash = 0.6;
             // 大当たりの はじまりに ときどき 役物 (初当たりは かならず どれか)
-            if (!e.charge && (e.from === 'normal' || Math.random() < 0.35)) startGimmick(e.from === 'normal' ? 'pillars' : 'kanabo', 3.2);
+            if (!e.charge && !st.gim && (e.from === 'normal' || Math.random() < 0.35)) startGimmick(e.from === 'normal' ? 'pillars' : 'kanabo', 3.2);
         } else if (e.type === 'uwanoseStart') {
             st.uwanose = { start: st.now, window: e.window, state: 'time' };
         } else if (e.type === 'iwakan') {
@@ -999,7 +1000,7 @@ const Lcd = (() => {
         } else {
             const r = t - T.clash;
             if (pr.win) {
-                if (!st.promoHit) { st.promoHit = true; st.flash = 1; st.shake = 0.8; }
+                if (!st.promoHit) { st.promoHit = true; st.flash = 1; st.shake = 0.8; startGimmick('kanabo', 2.6); }
                 text('撃破！！', W / 2, 44, 28 * (0.6 + 0.4 * ease(r * 3)), 'rainbow', 'center', { bold: true });
                 text(pr.extra ? '昇格！ 3000発 + RASH 突入！' : '昇格！ RASH 突入！', W / 2, 72, 12, '#ffd84a', 'center', { bold: true });
             } else {
@@ -1191,7 +1192,15 @@ const Lcd = (() => {
         });
         if (k < tClash) {
             text('おにおにたち VS 柱の氷', W / 2, 14, 12, tc, 'center', { bold: true });
-            if (Math.floor(k * 5) % 2 === 0) { ctx.fillStyle = 'rgba(255,240,160,0.85)'; ctx.fillRect(W / 2 - 6 + Math.sin(k * 9) * 30, 56 + Math.cos(k * 7) * 18, 12, 12); }
+            // 激闘: 2 秒ごとに だれかの 必殺技
+            const F = SHOW.hashiraFight, fi = Math.floor((k - T.battle) / SHOW.spBeat), fq = (k - T.battle) / SHOW.spBeat - fi, f = F[fi % F.length];
+            if (fq < 0.55) cutin(f.color, f.who, f.move, fq / 0.55, now, f.who === 'onioni' ? '#ffd84a' : '#ffffff');
+            else if (fq < 0.8) {
+                ctx.fillStyle = `rgba(255,255,255,${0.5 * (0.8 - fq) / 0.25})`;
+                ctx.fillRect(0, 0, W, H);
+                text('ドンッ！', W / 2, 50, 18, '#ffffff', 'center', { bold: true });
+                st.shake = Math.max(st.shake, 0.15);
+            }
         } else {
             st.shake = Math.max(st.shake, 0.2);
             ctx.fillStyle = `rgba(255,255,255,${0.25 + 0.2 * Math.sin(now * 30)})`;
@@ -1207,6 +1216,7 @@ const Lcd = (() => {
             if (plan.hit) {
                 ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.7 - r * 2)})`;
                 ctx.fillRect(0, 0, W, H);
+                gimmickWin('pillars', 3);
                 text('撃破！！', W / 2, 60, 28 * (0.6 + 0.4 * ease(r * 3)), 'rainbow', 'center', { bold: true });
             } else {
                 ctx.fillStyle = `rgba(0,0,30,${0.6 * r})`;
@@ -1227,6 +1237,68 @@ const Lcd = (() => {
             Art.draw(ctx, id, x, 80 + (i % 3) * 22, { height: 30, frame: Math.floor(now * 8) + i });
         });
         text('ライバル探検隊が かけつけた！', W / 2, 16, 11, '#1a3a8a', 'center', { strokeColor: '#ffffff' });
+    }
+
+    // SPリーチの たたかい: セリフと 必殺技の 応酬 (SHOW.spScript)。p: はじまってからの 秒、end: 決め手の 前まで
+    function spBattle(enemy, e, plan, p, end, now) {
+        const S = SHOW.spScript, T = SHOW.spBeat, walk = Math.floor(now * 6);
+        const active = p < end, idx = Math.min(Math.floor(p / T), S.length * 4), q = (p - idx * T) / T;
+        const b = S[idx % S.length], special = active && b.kind === 'special';
+        // 体力 (必殺技が 当たるたびに へる)
+        let hitE = 0, hitO = 0;
+        for (let i = 0; i <= idx; i++) {
+            const s = S[i % S.length];
+            if (s.kind !== 'special' || (i === idx && (q < 0.62 || !active))) continue;
+            if (s.who === 'enemy') hitO++; else hitE++;
+        }
+        const lunge = special && q > 0.4 && q < 0.75 ? Math.sin((q - 0.4) / 0.35 * Math.PI) : 0;
+        const impact = special && q >= 0.58 && q < 0.8;
+        const jolt = impact ? (Math.random() - 0.5) * 6 : 0;
+        const ox = 70 + (b.who === 'oni' ? lunge * 70 : impact ? -10 + jolt : 0);
+        const ex = 196 - (b.who === 'enemy' ? lunge * 70 : impact ? -10 + jolt : 0);
+        Art.draw(ctx, 'onioni', ox, H - 26, { height: 46, frame: walk });
+        Art.draw(ctx, enemy, ex, H - 26, { height: 60, frame: walk, flip: true });
+        // 体力の 帯
+        const bar = (x, v, c) => { ctx.fillStyle = '#000'; ctx.fillRect(x, 32, 100, 6); ctx.fillStyle = c; ctx.fillRect(x + 1, 33, 98 * Math.max(0.12, v), 4); };
+        bar(16, 1 - hitO * 0.22, '#3fdf6f');
+        bar(W - 116, 1 - hitE * 0.3, '#ff5a3a');
+        text('おにおに', 16, 44, 8, '#ffffff', 'left');
+        text(e.name, W - 16, 44, 8, enemyTextColor(plan.textColor, now), 'right', { bold: true });
+        if (!active) return;
+        if (b.kind === 'talk') {
+            // セリフの ふきだし
+            const line = b.line ? e[b.line] : b.text, x = b.who === 'enemy' ? W - 96 : 96;
+            const n = Math.min(line.length, Math.floor(q * 40) + 1);
+            ctx.font = `11px ${FONT}`;
+            const w = ctx.measureText(line).width + 14;
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.fillRect(x - w / 2, 52, w, 18);
+            ctx.beginPath(); ctx.moveTo(x - 4, 70); ctx.lineTo(x + (b.who === 'enemy' ? 12 : -12), 78); ctx.lineTo(x + 6, 70); ctx.fill();
+            text(line.slice(0, n), x - w / 2 + 7, 61, 11, '#14102a', 'left', { stroke: false });
+        } else {
+            // 必殺技: カットイン → 突進 → 命中
+            const oni = b.who === 'oni', name = oni ? SHOW.stBattle.selfMoves[b.move] : e.special;
+            if (q < 0.42) cutin(oni ? '#6a0a18' : '#2a0a4a', oni ? 'onioni' : enemy, name, q / 0.42, now, oni ? '#ffd84a' : '#ffffff');
+            if (impact) {
+                const tx = oni ? ex : ox;
+                ctx.fillStyle = `rgba(255,255,255,${0.5 * (1 - (q - 0.58) / 0.22)})`;
+                ctx.fillRect(0, 0, W, H);
+                seed = 21;
+                for (let i = 0; i < 12; i++) {
+                    const a = rnd() * Math.PI * 2, d = (q - 0.58) * 240 * (0.5 + rnd());
+                    ctx.fillStyle = i % 2 ? '#ffd84a' : '#ff5a3a';
+                    ctx.fillRect(tx + Math.cos(a) * d, H - 56 + Math.sin(a) * d, 4, 4);
+                }
+                text('ドンッ！', tx, 50, 16, '#ffffff', 'center', { bold: true });
+                st.shake = Math.max(st.shake, 0.15);
+            }
+        }
+    }
+    // 撃破の しゅんかんに 役物 (1 回の 変動で 1 度)
+    function gimmickWin(kind, dur = 2.8) {
+        if (st.gimWin) return;
+        st.gimWin = true;
+        startGimmick(kind, dur);
     }
 
     // 大きい リーチの 場面 (探検隊リーチ / 柱の氷リーチ)。k: 場面に 入ってからの 秒、len: 場面の 長さ
@@ -1258,23 +1330,17 @@ const Lcd = (() => {
         // 2) すすむ (おにおにと 仲間 / 柱の氷)
         const p = k - 2, body = len - 2;
         const walk = Math.floor(now * 6);
+        const aFrom0 = len - 3.2;
         if (hashira) {
-            // おにおに vs 柱の氷
-            const clash = Math.sin(p * 3);
-            Art.draw(ctx, 'onioni', 70 + clash * 6, H - 26, { height: 44, frame: walk });
-            Art.draw(ctx, enemy, 190 - clash * 6, H - 26, { height: 60, frame: walk, flip: true });
-            // 流派の わざ (嵐: 風 / 大渦: うず / 吹雪: 雪)
-            if (enemy === 'haru') for (let i = 0; i < 6; i++) { ctx.strokeStyle = 'rgba(200,255,220,0.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(150, 70, 10 + ((p * 30 + i * 12) % 60), now * 4 + i, now * 4 + i + 1.4); ctx.stroke(); }
-            if (enemy === 'okadishi') for (let i = 0; i < 5; i++) { ctx.strokeStyle = 'rgba(120,180,255,0.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(130, 100, 20 + i * 14, 6 + i * 4, 0, now * 5 + i, now * 5 + i + 2.5); ctx.stroke(); }
-            if (enemy === 'kanezu') snow(now, 140, 40, -120);
-            text(`VS ${e.name}`, W / 2, 20, 12, enemyTextColor(plan.textColor, now), 'center', { bold: true });
-            if (p < 2.4) text(e.intro, W / 2, 36, 10, '#ffffff');
+            spBattle(enemy, e, plan, p, aFrom0 - 2, now);
         } else {
             // 探検隊と いっしょに こおりくんを さがす (足あとを たどる)
             team.members.forEach((id, i) => Art.draw(ctx, id, 150 + i * 30, H - 24, { height: 34, frame: walk + i }));
             Art.draw(ctx, 'onioni', 100, H - 24, { height: 34, frame: walk });
-            text('こおりくんの 足あとだ！', W / 2, 22, 11, '#1a3a8a', 'center', { strokeColor: '#ffffff' });
-            for (let i = 0; i < 6; i++) { ctx.fillStyle = 'rgba(90,140,200,0.6)'; ctx.fillRect(20 + i * 14 - (p * 20) % 14, H - 20 + (i % 2) * 3, 4, 2); }
+            const L = SHOW.tankenLines, i = Math.floor(p / SHOW.spBeat);
+            text(L[i % L.length], W / 2, 22, 12, '#1a3a8a', 'center', { strokeColor: '#ffffff', bold: true });
+            Art.draw(ctx, team.members[i % 3], 28, 62, { height: 26, frame: walk });
+            for (let f = 0; f < 6; f++) { ctx.fillStyle = 'rgba(90,140,200,0.6)'; ctx.fillRect(20 + f * 14 - (p * 20) % 14, H - 20 + (f % 2) * 3, 4, 2); }
         }
         // 3) カットイン (まんなか)
         if (plan.cutin) {
@@ -1295,6 +1361,7 @@ const Lcd = (() => {
         if (k >= aTo) {
             const r = (k - aTo) / (len - aTo);
             if (plan.hit) {
+                gimmickWin(hashira ? 'kanabo' : 'doors');
                 text(hashira ? '撃破！！' : 'みつけた！！', W / 2, 60, 24 * (0.6 + 0.4 * ease(r * 3)), 'rainbow', 'center', { bold: true });
                 if (plan.yaku) text('激アツ', W / 2, 88, 12, '#ff3a4a', 'center', { bold: true });
                 if (hashira) text(e.lose, W / 2, 104, 10, '#ffffff');
@@ -1380,6 +1447,7 @@ const Lcd = (() => {
             const r = el - (lost ? t.end : t.result);
             const win = plan.hit;
             if (win) {
+                gimmickWin(plan.revive === 'win' ? 'pillars' : 'kanabo');
                 if (plan.revive === 'win') kakusei(W / 2, H - 4, 96, now);
                 else Art.draw(ctx, 'onioni', W / 2, H - 22, { height: 40, frame: walk });
                 ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.7 - r)})`;
@@ -1724,6 +1792,7 @@ const Lcd = (() => {
             if (plan.hit) {
                 ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.7 - r * 2)})`;
                 ctx.fillRect(0, 0, W, H);
+                gimmickWin('pillars', 3);
                 text('柱の氷 勝利！！', W / 2, 54, 22 * (0.5 + 0.5 * ease(r * 4)), 'rainbow', 'center', { bold: true });
                 reels({ y: 104, size: 26, gap: 32 }, plan.figures, [1, 1, 1], now);
             } else {

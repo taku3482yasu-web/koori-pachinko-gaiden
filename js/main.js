@@ -270,7 +270,7 @@
                 const sceneStart = 1.7 + g + 0.9, len = D - 0.7 - sceneStart;
                 at(sceneStart + 5.8, 'roar');
                 at(sceneStart + 7.6, 'cutin');
-                for (let k = 9.6; k < len - 8; k += 0.5) at(sceneStart + k, 'clash');
+                for (let k = 9.6; k < len - 8; k += SHOW.spBeat) { at(sceneStart + k, 'cutin'); at(sceneStart + k + 1.2, 'clash'); }
                 at(sceneStart + len - 8, 'smash');
                 at(sceneStart + len - 1.6, plan.hit ? 'gekiha' : 'lose');
             } else if (plan.reach && plan.reach !== 'normal' && plan.reach !== 'zenkaiten') {
@@ -278,7 +278,15 @@
                 if (plan.textColor) at(sceneStart, plan.textColor === 'white' ? 'cutin' : 'chance');
                 if (plan.cutin) at(sceneStart + 2 + body * 0.35, 'cutin');
                 if (plan.chance) at(sceneStart + 2 + body * 0.6, 'chance');
-                if (plan.enemy && plan.enemy !== 'rival') for (let k = 3; k < len - 3; k += 0.7) at(sceneStart + k, 'clash');
+                if (plan.enemy && plan.enemy !== 'rival') {
+                    // セリフと 必殺技の 音
+                    const n = Math.floor((len - 3.2 - 2) / SHOW.spBeat), B = SHOW.spBeat;
+                    for (let i = 0; i < n + 1 && i * B < len - 5.2; i++) {
+                        const s = SHOW.spScript[i % SHOW.spScript.length], t0 = sceneStart + 2 + i * B;
+                        at(t0, s.kind === 'special' ? 'cutin' : 'push');
+                        if (s.kind === 'special') at(t0 + B * 0.58, 'clash');
+                    }
+                }
                 at(sceneStart + len - 1.6, plan.hit ? 'gekiha' : 'lose');
             }
         } else if (plan.kind === 'battle') {

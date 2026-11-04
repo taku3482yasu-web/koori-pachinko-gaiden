@@ -454,7 +454,7 @@ const BoardView = (() => {
             ctx.imageSmoothingEnabled = false;
         }
         // 盤面の 役物は 筐体 (js/cabinet.js) が 大きく 描く ときは 描かない (view.noGimmick。2026-10-23 ユーザー指定)
-        if (!view.noGimmick) drawGimmick(ctx, b, gimmick, now);
+        if (!view.noGimmick && !(gimmick && zoom > 0)) drawGimmick(ctx, b, gimmick, now);
 
         // 電チューの羽根・アタッカーのふた
         Object.entries(board.parts).forEach(([id, part]) => {
@@ -483,6 +483,17 @@ const BoardView = (() => {
         });
         // 可動液晶: 見せ場では 玉の 上に 大きく 出す
         drawZoomedLcd(ctx, b, lcdCanvas, zoom, now);
+        // 役物は せり出した 液晶の 手前に 出す (2026-11-04 ユーザー指定: 液晶の うしろで 見えなかった)
+        if (gimmick && zoom > 0 && !view.noGimmick) {
+            const k = zoom < 1 ? 1 - Math.pow(1 - zoom, 3) : 1, s = 1 + (view.config.show.lcdZoom.scale - 1) * k;
+            const cx = b.lcd.x + b.lcd.w / 2, cy = b.lcd.y + b.lcd.h / 2 + (view.config.show.lcdZoom.offsetY || 0) * k;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(s, s);
+            ctx.translate(-(b.lcd.x + b.lcd.w / 2), -(b.lcd.y + b.lcd.h / 2));
+            drawGimmick(ctx, b, gimmick, now);
+            ctx.restore();
+        }
     }
 
     // カスタマイズで色が変わったときに、動かない部分を描き直す

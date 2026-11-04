@@ -18,6 +18,7 @@
 - 柱の氷RASH (2026-11-04): 柱の氷が 主役。基本は 勝負なし (`sub` flash: 虹ボタン・ぶるぶる・レバブル・先バレ → 虹色フラッシュ)。バトルの 当たりは `hKind` ippatsu / rainbow が ほとんどで plain は まれ。相手は `plan.rival`。
 - 「ボタンを押せ」などは 押さないと `CONFIG.show.promptWait` 秒 演出を 止めて 待つ (main の tick)。
 - 7 の リーチは 当たり確定 (2026-11-04)。はずれ・転落の 図柄の 左右に 7 を 出さない (`figures`・`stPlan`)。
+- SPリーチの たたかいは セリフと 必殺技の 応酬 (`SHOW.spScript`・`spBattle`。体力の 帯つき)。柱の氷リーチの 激闘は `SHOW.hashiraFight`。役物は 可動液晶の 手前に 描く (render の draw)。撃破の しゅんかんは `gimmickWin`。
 - 前作から 移した もの (2026-11-04): カスタマイズ (`js/customize.js`。演出の 見え方は `m.fx`)・図鑑と 実績 (`js/records.js`)・つづき (`saveGame`)・遊タイム (`spec.yutime`)・ステップアップ予告・違和感・全回転 5 種・早送り (ボタン長押し)・当たり履歴。
 - 先バレは 通常時も どちらの RASH も 発生する (`SHOW.senbare`・`result.senbare`)。2 つ: 前作の 録音 (`js/sound-heso.js`) を 低く した 音 と、おにおにの 先咆哮 (自作の 音。こっちが アツい)。ボタンは ふだん 赤で、先バレで 紫か 金 (`result.btn`。金は RASH 突入濃厚)。ボタン・レバーが 震える ときは CSS の vibrate と Sound の buzz。
 - 抽選は `js/machine.js` (画面に ふれない)、演出の 筋書きは `js/show.js`、液晶は `js/lcd.js`、盤面の 絵と 役物は `js/render.js`、筐体・金棒レバーは `js/cabinet.js`。数値は `js/config.js`。
