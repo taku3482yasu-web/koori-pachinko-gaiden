@@ -14,7 +14,7 @@ const Records = (() => {
         stage: { title: '背景', items: () => Object.fromEntries(SHOW.stories.map(s => [s.id, s.name])) },
         zenkaiten: { title: '全回転', items: () => Object.fromEntries(Object.entries(SHOW.zenkaiten).map(([k, v]) => [k, v.name])) },
         iwakan: { title: '違和感', items: () => Object.fromEntries(Object.entries(SHOW.iwakan).map(([k, v]) => [k, v.name])) },
-        premium: { title: 'プレミア', items: () => ({ shuketsuNotice: '柱の氷の 集結告知', senbare: '先バレ', senbareGold: '先バレの 金ボタン', teamJoin: 'チームの 合流', sango: '1・3・5 そろい', fastStage: '背景の 連続変化', stepGold: 'ステップアップの 金文字', gizi4: '疑似4連' }) }
+        premium: { title: 'プレミア', items: () => ({ uwOneshot: '上乗せの 一発告知', shuketsuNotice: '柱の氷の 集結告知', senbare: '先バレ', senbareGold: '先バレの 金ボタン', teamJoin: 'チームの 合流', sango: '1・3・5 そろい', fastStage: '背景の 連続変化', stepGold: 'ステップアップの 金文字', gizi4: '疑似4連' }) }
     };
     const ACHIEVEMENTS = [
         { id: 'firstHit', name: 'はじめての 大当たり', desc: '大当たりを 引く', stat: 'hits', value: 1 },

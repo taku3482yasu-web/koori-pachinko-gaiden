@@ -68,7 +68,7 @@
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
             pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
             stAlly: params.get('stAlly') || undefined, self: params.get('self') || undefined, foe: params.get('foe') || undefined, revive: params.get('revive') === '1',
-            btn: params.get('btn') || undefined, hKind: params.get('hKind') || undefined, notice: params.get('notice') || undefined,
+            uwLever: params.has('uwLever') ? params.get('uwLever') === '1' : undefined, btn: params.get('btn') || undefined, hKind: params.get('hKind') || undefined, notice: params.get('notice') || undefined,
             mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
             gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', promo: params.has('promo') ? params.get('promo') === '1' : undefined, step: params.get('step') || undefined
         };
@@ -198,7 +198,8 @@
             if (e.charge && e.next === 'st') { Sound.play('fanfare'); openRashChoice(); Records.add('chargeSt'); }
         } else if (e.type === 'roundStart') Sound.play('round');
         else if (e.type === 'uwanoseStart') Sound.play('chance');
-        else if (e.type === 'iwakan') { Sound.play('iwakan'); Sound.hush(900); }
+        else if (e.type === 'uwanoseLever') { if (e.oneshot) { Sound.play('ippatsu'); Sound.play('fanfare'); Records.seen('premium', 'uwOneshot'); } }
+        else if (e.type === 'goldFlash') { Sound.play('win'); Sound.play('gekiha'); }
         else if (e.type === 'uwanose') { Sound.play('gekiha'); Sound.play('fanfare'); }
         else if (e.type === 'uwanoseEnd') Sound.play('lose');
         else if (e.type === 'promoStart') { Sound.play('chance'); schedulePromo(e.promo); }
@@ -408,6 +409,7 @@
     function push() {
         Sound.unlock();
         if (Lcd.storyActive()) { Lcd.storySkip(); return; }
+        if (Customize.get('leverTap') === 'on' && game.machine && game.machine.bonus && game.machine.bonus.uwanose && game.machine.bonus.uwanose.phase === 'time') Machine.uwanoseLever(game.machine);
         if (Lcd.prompt() === 'mash') { if (Lcd.input('push')) Sound.play('clash'); }
         else if (Lcd.input('push')) { Sound.play('push'); Sound.play('chance'); }
         else Sound.play('push');
@@ -416,6 +418,11 @@
     }
     function lever() {
         Sound.unlock();
+        if (game.machine && game.machine.bonus && game.machine.bonus.uwanose && game.machine.bonus.uwanose.phase === 'time') {
+            Machine.uwanoseLever(game.machine);
+            Sound.play('pull');
+            return;
+        }
         if (Lcd.input('lever')) { Sound.play('pull'); Sound.play('smash'); }
         else Sound.play('leverTick');
     }
@@ -656,6 +663,10 @@
         $('debug-ending').addEventListener('click', () => Lcd.playStory('ending', 10));
         const stOpt = () => ({ senbare: $('debug-senbare').value || undefined, btn: $('debug-btn').value || undefined, enemy: enemy(), stAlly: $('debug-st-ally').value || undefined, self: $('debug-st-self').value || undefined, foe: $('debug-st-foe').value || undefined, textColor: $('debug-text').value || undefined });
         const inSt = () => { if (game.machine.mode !== 'st') Machine.debugMode(game.machine, 'st'); };
+        const uw = (uwanose, uwLever) => { inSt(); Machine.debugHold(game.machine, 'hit', { ...stOpt(), pay: 'uwanose', uwanose, uwLever }); };
+        $('debug-uw-win').addEventListener('click', () => uw(true, false));
+        $('debug-uw-lever').addEventListener('click', () => uw(true, true));
+        $('debug-uw-lose').addEventListener('click', () => uw(false, false));
         $('debug-st-win').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'hit', stOpt()); });
         $('debug-st-revive').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'hit', { ...stOpt(), revive: true, foe: stOpt().foe === 'gold' ? undefined : stOpt().foe }); });
         $('debug-st-lose').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'fall', stOpt()); });

@@ -7,12 +7,12 @@
 //   ST:     回数の かぎりなし。1 回転ごとに 大当たり (st.hitRate)・転落 (st.fallRate)・はずれ を 抽選。
 //           大当たり → ラウンドの あと また ST / 転落 → 通常時へ (おにおにが たおされる)
 //   大当たりは spec.rounds ラウンド (1/319 は いつも 3R)。spec.payout が ある 台 (1/399) は 初当たり 20R・RASH 中は 振り分け、
-//   上乗せタイム (spec.uwanose) が 成功すると ラウンドが ふえる (できごと uwanoseStart → iwakan → uwanose / uwanoseEnd)
+//   上乗せジャッジ (spec.uwanose) が 成功すると ラウンドが ふえる (できごと uwanoseStart → (uwanoseOneshot) → goldFlash → uwanose / uwanoseEnd)
 //   昇格チャレンジ (2026-11-04 ユーザー指定): 通常時の ヘソの 偶数図柄の 当たりの あと (result.promo)。結果は 当たりの ときに きまっている (result.next === 'st' なら 成功)。
 //     1 ラウンド目から ラウンド中に 液晶で おこなう (アタッカーは 開いたまま。ラウンドの あとだと 1/399 は 出玉で 結果が わかるため)。
 //     成功なら RASH へ (1/399 は 1500発 → 3000発に 昇格して ラウンドが ふえる)。ラウンドが 先に おわったら チャレンジの おわりを 待つ (phase 'promoWait')
 //   ラウンドの スキップ (2026-11-04 ユーザー指定。Machine.skipBonus): のこりの 出玉を すぐ もらう。昇格チャレンジの ある 当たりは 結果が わかってから。
-//     上乗せの ある 当たりは スキップの あとに 上乗せタイム (phase 'uwanoseWait')。判定も そのとき
+//     上乗せの ある 当たりは スキップの あとに 上乗せジャッジ (phase 'uwanoseWait')。判定も そのとき
 //   チャージ (2026-11-04 ユーザー指定。spec.charge): 通常時の ヘソの 低確率の 当たり (result.kind 'charge')。300発 (2R) を 右打ちで。spec.charge.st (5%) で ST、のこりは 通常時へ (回転数・連チャンは そのまま)
 //   ST は 2 つ (2026-11-04 ユーザー指定)。ST に 入る 大当たりの あいだに えらぶ (m.rashType。Machine.setRashType):
 //     おにおにRASH ('onioni'。mode 'st'): 上の 転落型
@@ -246,8 +246,9 @@ const Machine = (() => {
                 uwanose = {
                     round: u.rounds[0] + Math.floor(m.rng() * (u.rounds[1] - u.rounds[0] + 1)),
                     success: result.forceUwanose !== undefined ? result.forceUwanose : m.rng() < u.success,
-                    iwakanAt: rnd(u.iwakan[0], u.iwakan[1]), phase: 'wait', t: 0, iwakan: false
+                    iwakanAt: rnd(u.iwakan[0], u.iwakan[1]), phase: 'wait', t: 0, iwakan: false, leverUsed: false
                 };
+                uwanose.leverNotice = uwanose.success && (result.forceUwLever !== undefined ? result.forceUwLever : m.rng() < u.lever);
             }
         }
         m.bonus = { rounds, round: 0, count: 0, phase: 'opening', timer: cfg.opening, next: result.next, from, fig, payKind, uwanose, promo };
@@ -265,14 +266,14 @@ const Machine = (() => {
         emit(m, 'bonusStart', { rounds, next: result.next, from: 'normal', chain: m.chain, fig, plan: null, payKind: null, charge: true });
     }
 
-    // 上乗せタイム (window 秒)。成功なら iwakanAt 秒に 違和感 → reveal 秒 あとに ラウンドが ふえる
+    // 上乗せジャッジ (window 秒)。成功なら iwakanAt 秒に 黄金フラッシュ → reveal 秒 あとに ラウンドが ふえる
     function updateUwanose(m, dt) {
         const b = m.bonus, u = b.uwanose, cfg = m.spec.uwanose;
         if (!u || u.phase !== 'time') return;
         u.t += dt;
         if (u.success && !u.iwakan && u.t >= u.iwakanAt) {
             u.iwakan = true;
-            emit(m, 'iwakan', {});
+            emit(m, 'goldFlash', {});
         }
         if (u.success && u.iwakan && u.t >= u.iwakanAt + cfg.reveal) {
             u.phase = 'done';
@@ -324,7 +325,7 @@ const Machine = (() => {
         updateUwanose(m, dt);
         updatePromo(m, dt, cfg);
         if (b.phase === 'uwanoseWait') {
-            // スキップの あとの 上乗せタイムの おわりを 待つ
+            // スキップの あとの 上乗せジャッジの おわりを 待つ
             if (b.uwanose.phase !== 'done') return;
             if (b.round < b.rounds) { b.phase = 'interval'; b.timer = cfg.interval; }
             else toEnding(m, b, cfg);
@@ -383,6 +384,17 @@ const Machine = (() => {
             }
             emit(m, 'bonusEnd', { next: b.next });
         }
+    }
+
+    // 上乗せジャッジ中に レバーを 引いた: 成功が きまっている ゲームの 25% で 一発告知 (黄金フラッシュ確定)。1 回の ジャッジで 1 回だけ
+    function uwanoseLever(m) {
+        const u = m.bonus && m.bonus.uwanose;
+        if (!u || u.phase !== 'time' || u.leverUsed) return false;
+        u.leverUsed = true;
+        const oneshot = u.leverNotice && !u.iwakan;
+        if (oneshot) u.iwakanAt = u.t + m.spec.uwanose.oneshot;
+        emit(m, 'uwanoseLever', { oneshot });
+        return oneshot;
     }
 
     // ----- ラウンドの スキップ -----
@@ -506,6 +518,7 @@ const Machine = (() => {
         if (options.senbare) { result.senbare = options.senbare; result.btn = options.btn || result.btn || 'purple'; }
         if (options.pay) result.forcePay = options.pay;
         if (options.uwanose !== undefined) result.forceUwanose = options.uwanose;
+        if (options.uwLever !== undefined) result.forceUwLever = options.uwLever;
         m.holds[fig].unshift(result);
         if (m.holds[fig].length > m.config.machine.holdMax) m.holds[fig].pop();
         emit(m, 'hold', { fig, result, count: m.holds[fig].length });
@@ -526,6 +539,6 @@ const Machine = (() => {
         emit(m, 'storyChange', { story });
     }
 
-    return { canSkip, skipBonus, debugStory, create, enter, update, aim, support, setRashType, snapshot, restore, debugHold, debugMode, weightedPick };
+    return { uwanoseLever, canSkip, skipBonus, debugStory, create, enter, update, aim, support, setRashType, snapshot, restore, debugHold, debugMode, weightedPick };
 })();
 if (typeof module !== 'undefined') module.exports = { Machine };
