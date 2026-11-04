@@ -152,7 +152,7 @@ button:hover { border-color: var(--accent); }
 .lt-badge { color: #1a1000; background: var(--gold); border-radius: 4px; padding: 0 5px; font-size: 13px; font-weight: bold; }
 .lt-badge[hidden] { display: none; }
 .rc-note { font-size: 11px; color: var(--muted); }
-.picker { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.picker { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; padding: 16px;  }
 .picker[hidden] { display: none; }
 .picker-box { width: min(100%, 460px); max-height: 100%; overflow-y: auto; background: linear-gradient(#141c44, #0a0e24); border: 2px solid var(--accent); border-radius: 12px; padding: 16px; }
 .picker-kicker { margin: 0; text-align: center; color: var(--accent); font-size: 13px; }
@@ -174,15 +174,47 @@ button:hover { border-color: var(--accent); }
 .picker-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 /* スマホ: 筐体と 操作を 1 画面に */
+/* スマホ (2026-11-04 ユーザー指定): 左打ち・右打ち・発射は 画面の 下に 固定して、スクロールしなくても さわれる ように */
 @media (max-width: 640px) {
-    .machine { flex-direction: column; flex-wrap: nowrap; align-items: stretch; padding: 8px 8px 16px; gap: 6px; }
-    .cabinet { width: min(100%, calc((100vh - 150px) * 0.647)); margin: 0 auto; }
-    .controls { max-width: none; gap: 6px; }
-    .status { grid-template-columns: repeat(4, 1fr); gap: 4px; }
-    .status-item { padding: 4px 6px; }
-    .status-item .value { font-size: 16px; }
-    .handle { width: 84px; height: 84px; }
-    .handle-center { inset: 26px; font-size: 14px; }
+    .machine { flex-direction: column; flex-wrap: nowrap; align-items: stretch; padding: 6px 6px calc(96px + env(safe-area-inset-bottom)); gap: 4px; }
+    .cabinet { width: min(100%, calc((100vh - 170px) * 0.647)); width: min(100%, calc((100dvh - 170px) * 0.647)); margin: 0 auto; }
+    .controls { max-width: none; gap: 6px; flex: none; }
+    .mode-display { order: 1; padding: 3px 8px; font-size: 13px; }
+    .aim-display { display: none; }
+    .status { order: 2; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .status-item { padding: 1px 6px; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 4px; }
+    .status-item .label { font-size: 9px; }
+    .status-item .value { font-size: 14px; }
+    .strength-row { order: 3; }
+    .machine-bar { order: 4; flex-wrap: wrap; }
+    .menu-row { order: 5; flex-wrap: wrap; }
+    .hint { display: none; }
+    .handle-area {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+        flex-wrap: nowrap; justify-content: space-between; gap: 6px;
+        padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+        background: rgba(5, 7, 13, 0.94); border-top: 1px solid var(--panel-line);
+    }
+    .handle-area .aim-button { flex: 1 1 0; min-height: 64px; padding: 4px; font-size: 15px; }
+    .handle { width: 64px; height: 64px; }
+    .handle-center { inset: 19px; font-size: 12px; }
+    .handle-knob span { top: 3px; width: 10px; height: 18px; margin-left: -5px; }
+    .fire-button { width: 64px; height: 64px; flex: none; font-size: 12px; }
+    .rash-choice { position: fixed; left: 8px; right: 8px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 31; padding: 6px; }
+    .rash-choice button { padding: 6px 8px; }
+    .rc-note { font-size: 11px; }
+    .toast { bottom: calc(90px + env(safe-area-inset-bottom)); max-width: calc(100% - 16px); }
+}
+/* スマホの 横向き: 操作は 右に ならべて、スクロールしなくても さわれる ように */
+@media (orientation: landscape) and (max-height: 520px) {
+    .machine { flex-wrap: nowrap; max-width: none; padding: 4px; gap: 8px; justify-content: center; }
+    .cabinet { width: calc((100vh - 8px) * 0.647); width: calc((100dvh - 8px) * 0.647); flex: none; }
+    .controls { max-width: 300px; gap: 4px; max-height: calc(100vh - 8px); overflow-y: auto; }
+    .handle-area { order: -1; flex-wrap: nowrap; gap: 6px; }
+    .handle-area .aim-button { font-size: 12px; padding: 4px 6px; white-space: nowrap; }
+    .handle { width: 64px; height: 64px; }
+    .handle-center { inset: 19px; font-size: 12px; }
+    .fire-button { width: 64px; height: 64px; font-size: 12px; }
     .hint { display: none; }
 }
 
