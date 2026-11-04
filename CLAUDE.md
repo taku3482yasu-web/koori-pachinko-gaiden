@@ -22,6 +22,7 @@
 - 抽選は `js/machine.js` (画面に ふれない)、演出の 筋書きは `js/show.js`、液晶は `js/lcd.js`、盤面の 絵と 役物は `js/render.js`、筐体・金棒レバーは `js/cabinet.js`。数値は `js/config.js`。
 - 前作の キャラの 絵は koori-card の `src/art/legacy-art.js` から 写した (`js/art-legacy.js`)。柱の氷の 3 人と 金棒は `js/art.js`。
 - 左の 道釘の 坂は 釘の くぼみで 玉が 止まるので、釘の 少し 上に 見えない レール (`board.slopeRail`・面 `slope`) を 通して ある。摩擦 0.998 は ヘソの 入りに とても 効く。玉が 止まる 場所は `node tools/stuck.js 27` で しらべる。
+- スマホ (2026-11-04): 幅 640px 以下は 左打ち・ハンドル・発射・右打ちの 段を 画面の 下に 固定 (`.handle-area`)。RASH えらびも その 上に 固定。横向きは 操作を 右の 一番 上に。
 - テスト: `node tools/test.js` (抽選・継続率・撃破率・演出の 信頼度)。盤面の 玉の 流れは `node tools/flow.js`・`tools/trace.html`。コミットの 前に .githooks/pre-commit が テストする (`git config core.hooksPath .githooks`)。
 - 画面の 確認: `sh tools/shot.sh "index.html?spec=s319&force=hit&skip=5" out.png 1000,1100` (force: hit / hitJitan / reach / st / stHit / fall / jitan / hst / hstHit / hstMiss。&setting=6・&senbare=roar|voice。force=charge|chargeSt・&reach=hashiraAll・&mini=goldDog&miniWin=0・&text=gold・&gizi=2。画面の「デバッグ」ボタンで リーチ・ミニゲーム・文字の 色・疑似連・チャージを えらべる。&debug=1 なら はじめから ひらく)。
 - main に push すると GitHub Pages に 公開される。変更が できて テストが 通ったら、聞かずに commit して main に push する。
