@@ -68,7 +68,7 @@
             shuketsu: params.has('shuketsu') ? params.get('shuketsu') === '1' : undefined, senbare: params.get('senbare') || undefined,
             pay: params.get('pay') || undefined, uwanose: params.has('uwanose') ? params.get('uwanose') === '1' : undefined,
             stAlly: params.get('stAlly') || undefined, self: params.get('self') || undefined, foe: params.get('foe') || undefined, revive: params.get('revive') === '1',
-            hKind: params.get('hKind') || undefined, notice: params.get('notice') || undefined,
+            btn: params.get('btn') || undefined, hKind: params.get('hKind') || undefined, notice: params.get('notice') || undefined,
             mini: params.get('mini') || undefined, miniWin: params.get('miniWin') !== '0', textColor: params.get('text') || undefined,
             gizi: params.has('gizi') ? Number(params.get('gizi')) : undefined, sango: params.get('sango') === '1', promo: params.has('promo') ? params.get('promo') === '1' : undefined, step: params.get('step') || undefined
         };
@@ -168,7 +168,7 @@
         const m = game.machine;
         Lcd.handle(e, m);
         if (e.type === 'hold') {
-            if (e.result.senbare && m.mode === 'hst') senbare(e.result.senbare);
+            if (e.result.senbare) senbare(e.result.senbare, e.result.btn);
             else Sound.play('hold');
         }
         else if (e.type === 'spinStart') { Sound.play('stop'); schedule(e.plan, e.duration); spinFx(e.plan); }
@@ -340,10 +340,11 @@
         Lcd.trophy(level);
     }
 
-    // 先バレ (2026-11-04 ユーザー指定): voice = 前作の 先バレ音を 低く した もの / roar = おにおにの 先咆哮。どちらも ボタンが 赤く 光る
-    function senbare(kind) {
+    // 先バレ (2026-11-04 ユーザー指定): voice = 前作の 先バレ音を 低く した もの / roar = おにおにの 先咆哮 (こっちが アツい)。ボタンが 紫か 金に なる (金は RASH 突入濃厚)
+    function senbare(kind, btn) {
         Sound.play(kind === 'roar' ? 'senbareRoar' : 'senbareVoice');
-        flashClass($('push'), 'red', kind === 'roar' ? 2200 : 1400);
+        flashClass($('push'), btn === 'gold' ? 'gold' : 'purple', kind === 'roar' ? 2600 : 1800);
+        Records.seen('premium', btn === 'gold' ? 'senbareGold' : 'senbare');
     }
     // ボタン・レバーが 震える (2026-11-04 ユーザー指定: 動画を 参考に): モーターの ような 速い ぶるぶる (CSS の vibrate) と ヴヴヴヴ… (Sound の buzz)。
     // スマホは 本体も ふるわせる
@@ -616,6 +617,7 @@
         // えらんだ リーチ・ミニゲーム・文字の 色・疑似連で 次の 変動を つくる
         const staged = () => ({
             reach: $('debug-reach-kind').value || undefined, mini: $('debug-mini').value || undefined,
+            senbare: $('debug-senbare').value || undefined, btn: $('debug-btn').value || undefined,
             step: $('debug-step').value || undefined, textColor: $('debug-text').value || undefined, gizi: $('debug-gizi').value === '' ? undefined : Number($('debug-gizi').value)
         });
         $('debug-show-hit').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: 'st', ...staged() }));
@@ -625,7 +627,7 @@
         $('debug-promo-lose').addEventListener('click', () => Machine.debugHold(game.machine, 'hit', { next: game.machine.spec.firstHit[1].next, promo: true, ...staged() }));
         $('debug-opening').addEventListener('click', () => Lcd.playStory('opening'));
         $('debug-ending').addEventListener('click', () => Lcd.playStory('ending', 10));
-        const stOpt = () => ({ enemy: enemy(), stAlly: $('debug-st-ally').value || undefined, self: $('debug-st-self').value || undefined, foe: $('debug-st-foe').value || undefined, textColor: $('debug-text').value || undefined });
+        const stOpt = () => ({ senbare: $('debug-senbare').value || undefined, btn: $('debug-btn').value || undefined, enemy: enemy(), stAlly: $('debug-st-ally').value || undefined, self: $('debug-st-self').value || undefined, foe: $('debug-st-foe').value || undefined, textColor: $('debug-text').value || undefined });
         const inSt = () => { if (game.machine.mode !== 'st') Machine.debugMode(game.machine, 'st'); };
         $('debug-st-win').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'hit', stOpt()); });
         $('debug-st-revive').addEventListener('click', () => { inSt(); Machine.debugHold(game.machine, 'hit', { ...stOpt(), revive: true, foe: stOpt().foe === 'gold' ? undefined : stOpt().foe }); });
