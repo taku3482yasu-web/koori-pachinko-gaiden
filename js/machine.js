@@ -43,6 +43,7 @@ const Machine = (() => {
             mode: 'normal',          // 'normal' 通常時 / 'jitan' 時短 / 'st' おにおにRASH / 'hst' 柱の氷RASH
             rashType: 'onioni',      // つぎの ST を どちらの RASH に するか ('onioni' / 'hashira')
             stLeft: 0,               // 柱の氷RASH の 残り回数
+            stAlly: null,            // おにおにRASH で 合流している 仲間 { team, members }
             jitanLeft: 0,            // 時短の 残り回数
             stSpins: 0,              // ST に 入ってからの 回転数
             chain: 0,                // 連チャン数 (初当たりを 1 とする。通常時に もどったら 0)
@@ -455,6 +456,10 @@ const Machine = (() => {
         if (options.mini) { result.forceMini = options.mini; result.forceMiniWin = options.miniWin !== false; }
         if (options.textColor) result.forceText = options.textColor;
         if (options.gizi !== undefined) result.forceGizi = options.gizi;
+        if (options.stAlly) result.forceStAlly = options.stAlly;
+        if (options.self) result.forceSelf = options.self;
+        if (options.foe) result.forceFoe = options.foe;
+        if (options.revive) result.forceRevive = true;
         addShow(m, fig, result);
         if (options.sango) Object.assign(result, { sango: true, next: 'st', holdColor: 'white', shownColor: 'white' });
         if (options.step) result.forceStep = options.step;

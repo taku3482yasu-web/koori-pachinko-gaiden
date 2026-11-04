@@ -18,6 +18,10 @@
 //   チャンスアップ: 保留の 色・セリフの 色・疑似連・カットインの 色・敵の カットインの 文字の 色 (白 < 赤 < 金。金は 80% 以上)・群 (ふぶき)・PUSH ボタン・金棒レバー・役物
 //   rel = 出たら 当たる 割合。はずれで 出る 割合は スペックの 確率から rates() が 計算する
 // ST (バトル): 当たり・転落の 変動は おにおにの バトル。相手で 撃破率が かわる (show.battle)
+//   おにおにRASH の 流れ (2026-11-04 ユーザー指定): 柱の神殿を ダッシュ → リーチ → 敵の カットインと 撃破期待度 ★1〜5 →
+//     (仲間が いれば 先に 攻撃) → 自分の 技 (白 青 緑 赤 金。白以外は 80% 以上) → 敵の 技 (紫 赤 金。金は 確定 = 威嚇) → 激突 (ボタン / レバー) →
+//     勝てば 図柄ぞろい / 負ければ 画面が 赤く 点滅して 復活チャレンジ (20% で 覚醒して 復活・ダメなら まんなかが END 図柄で 終了)
+//   仲間: リーチの 前や 当たりの 保留の 前に 合流する。チームで 来たら 当たり濃厚
 //   相手は 結果から えらぶ: 当たりなら weight × 撃破率、転落なら weight × (1 − 撃破率)。
 //   こう すると「その 相手が 出たときの 撃破率」が ちょうど kill に なる (weight は スペックの 継続率に 合わせて ある)
 // 時短: はやい 変動。当たりは「こおりくんの 声が きこえた！」リーチから
@@ -30,12 +34,12 @@
 const SHOW = {
     // ST の 相手 (2026-11-03 ユーザー指定: 撃破率が 高い 順に ハリージェネラル > ヒョウガリュウ > ハルゥ > オカディシ > カネーズ)
     enemies: {
-        harigeneral: { name: 'ハリージェネラル', kill: 0.95, side: 'ally', ryuha: 'はり一族の 将軍', color: '#ffd84a', intro: 'はり一族の 力を 見よ！', win: '出直してくるがよい！', lose: 'ばかな… 針が 折れた…' },
-        hyougaryu:   { name: 'ヒョウガリュウ', kill: 0.85, side: 'ally', ryuha: '氷河の 竜', color: '#7ad8ff' },
+        harigeneral: { name: 'ハリージェネラル', stars: 5, kill: 0.95, side: 'ally', ryuha: 'はり一族の 将軍', color: '#ffd84a', intro: 'はり一族の 力を 見よ！', win: '出直してくるがよい！', lose: 'ばかな… 針が 折れた…' },
+        hyougaryu:   { name: 'ヒョウガリュウ', stars: 4, kill: 0.85, side: 'ally', ryuha: '氷河の 竜', color: '#7ad8ff' },
         asatana:     { name: 'アサタナ', kill: 0.6, side: 'hashira', ryuha: '柱の氷の 下っ端', color: '#a8c8e8', intro: 'ここは 通さないぞ！', win: 'へへっ ざまあみろ！', lose: 'ひいい… カネーズさま…' },
-        haru:        { name: 'ハルゥ', kill: 0.70, side: 'hashira', ryuha: '嵐の 流派', color: '#9cf0b0', intro: '嵐が おまえを さらう！', win: '風は わたしの みかただ', lose: '嵐が… やんだ…' },
-        okadishi:    { name: 'オカディシ', kill: 0.50, side: 'hashira', ryuha: '大渦の 流派', color: '#5a9cff', intro: '大渦に のまれろ！', win: 'うずの そこで ねむれ', lose: 'うずが… ほどける…' },
-        kanezu:      { name: 'カネーズ', kill: 0.30, side: 'hashira', ryuha: '吹雪の 流派', color: '#e0e8ff', intro: '古き しきたりに したがえ！', win: 'これが こおり一族の 力だ', lose: 'しきたりが… くずれる…' }
+        haru:        { name: 'ハルゥ', stars: 3, kill: 0.70, side: 'hashira', ryuha: '嵐の 流派', color: '#9cf0b0', intro: '嵐が おまえを さらう！', win: '風は わたしの みかただ', lose: '嵐が… やんだ…' },
+        okadishi:    { name: 'オカディシ', stars: 2, kill: 0.50, side: 'hashira', ryuha: '大渦の 流派', color: '#5a9cff', intro: '大渦に のまれろ！', win: 'うずの そこで ねむれ', lose: 'うずが… ほどける…' },
+        kanezu:      { name: 'カネーズ', stars: 1, kill: 0.30, side: 'hashira', ryuha: '吹雪の 流派', color: '#e0e8ff', intro: '古き しきたりに したがえ！', win: 'これが こおり一族の 力だ', lose: 'しきたりが… くずれる…' }
     },
     // 相手の 出やすさ (スペックごと)。Σ weight × kill / Σ weight = 継続率 に なる ように して ある (tools/test.js で たしかめる)
     battleWeights: {
@@ -46,6 +50,23 @@ const SHOW = {
     harigeneralChance: { hit: 0.98, fall: 0.38 },
     // ほかの 相手の チャンスアップ (当たり / 転落)
     chanceUp: { hit: 0.55, fall: 0.12 },
+    // おにおにRASH の バトル。hit: 勝つ ように 見える バトル / fall: 負ける ように 見える バトル (転落と 復活する 当たり)
+    stBattle: {
+        revive: 0.2,      // 負けた ように 見えた バトルの うち 覚醒して 復活する 割合
+        self: { hit: { white: 35, blue: 20, green: 20, red: 15, gold: 10 }, fall: { white: 80, blue: 10, green: 6, red: 3, gold: 1 } },
+        foe: { hit: { purple: 55, red: 30, gold: 15 }, fall: { purple: 80, red: 20, gold: 0 } },
+        selfMoves: { white: '金棒ふり', blue: '鬼火パンチ', green: '鬼鬼ラッシュ', red: '鬼鬼の金棒', gold: '鬼鬼の金棒・極' },
+        // 仲間の 合流: hit / fall はバトルの 回転で (リーチの 前に)、aheadHit / aheadFall は 保留に バトルが ある はずれの 回転で、miss は ふつうの はずれで
+        join: { hit: 0.25, fall: 0.08, aheadHit: 0.3, aheadFall: 0.1, miss: 0.004 },
+        team: { hit: 0.25, fall: 0.01 },     // 合流が チーム (3 人) に なる 割合
+        allyMoves: { okagappa: 'おかピポっと光線', hibikimakuri: '大音響4DX', yamamou: 'おちょくりボーンフィーバー', sasaki: 'ASAスラッシュ', kotani: 'NABIテンポ', asahara: 'DOPAPANCHI', shibata: 'シバタードライバー', ikekimu: 'イケキムドライブ', ueno: 'マッスルウエノクラッシュ' },
+        time: { reach: 1, reachHold: 1.4, join: 1.8, enemy: 2.4, ally: 2.4, team: 3.6, self: 1.8, foe: 1.8, clash: 1, action: 2.2, red: 1.4, revive: 3, end: 2 }
+    },
+    teams: [
+        { name: 'チーム5DX', members: ['okagappa', 'hibikimakuri', 'yamamou'] },
+        { name: 'チームASK-3', members: ['sasaki', 'kotani', 'asahara'] },
+        { name: 'チームお願いマッスル', members: ['shibata', 'ueno', 'ikekimu'] }
+    ],
     // ST の はずれで ときどき 相手の 気配 (バトルに ならない)
     stTease: 0.06,
 
@@ -203,7 +224,7 @@ const SHOW = {
     // crack: 1・3・5 の あとの 流れ (秒)。ひび → 究極形態が 出る → 画面を 粉砕 → 咆哮 → おめでとう！
     crack: { crack: 1.5, emerge: 3.7, smash: 4.7, roar: 6.9, end: 9.5 },
     time: { sango: 14, sangoStop: 4.5, post: 6.5, postStop: 4, oneshot: 4, oneshotStop: 2.2, next: 1.6, gun: 2.5, mini: 6.5, miniFail: 2.4, charge: 3.6, sp: { harigeneral: 22, asatana: 23, haru: 25, okadishi: 26, kanezu: 28, hashiraAll: 32 },
-        normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
+        normalReach: 11, tanken: 18, zenkaiten: 14, stMiss: 1.8, stJoin: 3.2, stTease: 4.5, battle: 12, jitan: 1.6, jitanReach: 9, hQuick: 1.8, hIppatsu: 4, hBattle: 11 }
 };
 
 const Show = (() => {
@@ -456,12 +477,23 @@ const Show = (() => {
         return p;
     }
 
-    // ST: はずれは はやく。当たり・転落は バトル
+    // おにおにRASH の 仲間 (だれか 1 人 / チームなら 3 人)
+    function pickAlly(good, rng, force) {
+        const team = SHOW.teams[Math.floor(rng() * SHOW.teams.length)];
+        if (force === 'team' || (!force && rng() < SHOW.stBattle.team[good ? 'hit' : 'fall'])) return { team: team.name, members: team.members };
+        return { team: null, members: [team.members[Math.floor(rng() * 3)]] };
+    }
+
+    // ST: はずれは はやく。当たり・転落は リーチから バトル
     function stPlan(config, m, result, rng) {
-        const T = SHOW.time;
+        const T = SHOW.time, B = SHOW.stBattle, BT = B.time;
         if (result.kind === 'miss') {
+            // 仲間の 合流 (当たりの 保留の 前に 来やすい)
+            const hitAhead = m.holds[2].some(h => isHit(h)), fallAhead = m.holds[2].some(h => h.kind === 'fall');
+            let joined = null;
+            if (!m.stAlly && rng() < (hitAhead ? B.join.aheadHit : fallAhead ? B.join.aheadFall : B.join.miss)) joined = m.stAlly = pickAlly(hitAhead, rng);
             const tease = rng() < SHOW.stTease;
-            return { kind: 'stMiss', figures: figures(result, false, rng), tease: tease ? pickEnemyAny(m, rng) : null, duration: tease ? T.stTease : T.stMiss };
+            return { kind: 'stMiss', figures: figures(result, false, rng), tease: tease ? pickEnemyAny(m, rng) : null, joined, duration: joined ? T.stJoin : tease ? T.stTease : T.stMiss };
         }
         const hit = isHit(result);
         const enemy = result.forceEnemy || battleEnemy(m.specId, hit, rng);
@@ -469,14 +501,42 @@ const Show = (() => {
         let chance;
         if (enemy === 'harigeneral') chance = rng() < (hit ? SHOW.harigeneralChance.hit : SHOW.harigeneralChance.fall);
         else chance = rng() < (hit ? SHOW.chanceUp.hit : SHOW.chanceUp.fall);
-        // 決め手: 当たりの とき ときどき 金棒レバー (ほぼ 撃破)
-        const action = hit ? (rng() < 0.35 ? 'lever' : 'push') : (rng() < 0.03 ? 'lever' : 'push');
+        // 復活: 負けた ように 見えた バトルの revive が 復活に なる ように、当たりの 一部を「負けて 復活」に する
+        const st = m.spec.st, reviveShare = B.revive / (1 - B.revive) * st.fallRate / st.hitRate;
+        const revive = !hit ? 'fail' : result.forceRevive || rng() < reviveShare ? 'win' : 'none';
+        const looksWin = revive === 'none', pool = looksWin ? 'hit' : 'fall';
+        // 仲間: すでに 合流している か、リーチの 前に 合流する
+        let ally = m.stAlly, joinNow = false;
+        if (result.forceStAlly) { ally = pickAlly(looksWin, rng, result.forceStAlly); joinNow = true; }
+        else if (!ally && rng() < B.join[pool]) { ally = pickAlly(looksWin, rng); joinNow = true; }
+        m.stAlly = null;
+        const self = result.forceSelf || pick(B.self[pool], rng);
+        const foe = result.forceFoe || pick(B.foe[pool], rng);
+        const allyColor = ally ? pick(B.self[pool], rng) : null;
+        // 決め手: 金棒レバーは ほぼ 撃破
+        const action = looksWin ? (rng() < 0.35 ? 'lever' : 'push') : (rng() < 0.03 ? 'lever' : 'push');
+        const odd = [1, 3, 5, 7, 7, 7], n = odd[Math.floor(rng() * odd.length)];
+        // 時間の ならび
+        const t = {};
+        let c = BT.reach;
+        t.reach = c;
+        c += BT.reachHold;
+        if (joinNow) { t.join = c; c += BT.join; }
+        t.enemy = c; c += BT.enemy;
+        if (ally) { t.ally = c; c += ally.team ? BT.team : BT.ally; }
+        t.self = c; c += BT.self;
+        t.foe = c; c += BT.foe;
+        t.clash = c; c += BT.clash;
+        t.action = c; c += BT.action;
+        t.result = c;
+        if (!looksWin) { t.red = c; c += BT.red; t.revive = c; c += BT.revive; t.end = c; } else t.end = c;
+        c += BT.end;
         return {
-            kind: 'battle', hit, enemy, enemyName: e.name, kill: e.kill, chance, action,
+            kind: 'battle', hit, enemy, enemyName: e.name, kill: e.kill, stars: e.stars, chance, action, revive, ally, self, foe, allyColor, t,
             textColor: result.forceText || pickText(SHOW.battleText[hit ? 'hit' : 'st'], rng),
-            yaku: hit && rng() < 0.15,
-            figures: hit ? [7, 7, 7] : [1, 2, 3],
-            duration: T.battle + (chance ? 1 : 0)
+            yaku: looksWin && rng() < 0.15,
+            figures: hit ? [n, n, n] : [n, 'END', n],
+            duration: c
         };
     }
 

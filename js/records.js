@@ -14,7 +14,7 @@ const Records = (() => {
         stage: { title: '背景', items: () => Object.fromEntries(SHOW.stories.map(s => [s.id, s.name])) },
         zenkaiten: { title: '全回転', items: () => Object.fromEntries(Object.entries(SHOW.zenkaiten).map(([k, v]) => [k, v.name])) },
         iwakan: { title: '違和感', items: () => Object.fromEntries(Object.entries(SHOW.iwakan).map(([k, v]) => [k, v.name])) },
-        premium: { title: 'プレミア', items: () => ({ sango: '1・3・5 そろい', fastStage: '背景の 連続変化', stepGold: 'ステップアップの 金文字', gizi4: '疑似4連' }) }
+        premium: { title: 'プレミア', items: () => ({ teamJoin: 'チームの 合流', sango: '1・3・5 そろい', fastStage: '背景の 連続変化', stepGold: 'ステップアップの 金文字', gizi4: '疑似4連' }) }
     };
     const ACHIEVEMENTS = [
         { id: 'firstHit', name: 'はじめての 大当たり', desc: '大当たりを 引く', stat: 'hits', value: 1 },
@@ -27,6 +27,8 @@ const Records = (() => {
         { id: 'chargeSt', name: 'チャージから RASH', desc: 'チャージから RASH に 入る', stat: 'chargeSt', value: 1 },
         { id: 'promo', name: '昇格', desc: '昇格チャレンジで こおりくんの 影を 撃破する', stat: 'promoWins', value: 1 },
         { id: 'ending', name: 'こおりくん 救出', desc: 'エンディングを 見る', stat: 'endings', value: 1 },
+        { id: 'revive', name: '覚醒', desc: '復活チャレンジで 覚醒する', stat: 'revives', value: 1 },
+        { id: 'teamJoin', name: 'チーム 合流', desc: 'おにおにRASH で チームが 合流する', stat: 'seen:premium:teamJoin', value: 1 },
         { id: 'yutime', name: '遊タイム', desc: '遊タイムに 入る', stat: 'yutimes', value: 1 },
         { id: 'sango', name: '1・3・5', desc: '図柄が 1・3・5 で そろう', stat: 'seen:premium:sango', value: 1 },
         { id: 'temple', name: '柱の神殿', desc: '背景が 柱の神殿に なる', stat: 'seen:stage:temple', value: 1 },
