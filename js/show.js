@@ -145,7 +145,7 @@ const SHOW = {
     // 1・3・5 そろい: ST へ 行く 通常時の 当たりの うち この 割合。はずれは 1・3・5 に ならない
     sango: 0.08,
     // 背景: 満月の rel は 90% 以上 (rates が はずれの 割合を 計算する)。hitAhead は 保留に 当たりが ある 1 回転ごとの 出やすさ
-    stage: { moon: { hitAhead: 0.1, hit: 0.2, rel: 0.93 }, temple: { hitAhead: 0.05 }, change: 0.35, fast: 0.7, fastMiss: 0.0002 },
+    stage: { moon: { hitAhead: 0.1, hit: 0.1, rel: 0.95 }, temple: { hitAhead: 0.05 }, change: 0.35, fast: 0.7, fastMiss: 0.0002 },
     // ステップアップ予告 (前作から。3 段目の 文字が 赤なら チャンス・金なら 約 90%)。hit: 当たりの ときの 割合 / rel: 出たら 当たる 割合
     stepUp: {
         time: 1.1, tail: 0.5,

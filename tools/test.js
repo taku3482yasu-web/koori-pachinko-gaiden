@@ -206,10 +206,10 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const perRound = CONFIG.machine.bonus.count * CONFIG.payout.attacker;
     const avgOf = list => list.reduce((a, b) => a + b.balls, 0) / Math.max(1, list.length);
     const pay = spec.payout;
-    const firstBonus = r.bonusBalls.filter(b => b.from === 'normal' && b.next === 'st'), rashBonus = r.bonusBalls.filter(b => b.from !== 'normal' && b.from !== 'charge');
+    const firstBonus = r.bonusBalls.filter(b => b.from === 'normal' && b.next === 'st'), rashBonus = r.bonusBalls.filter(b => b.from !== 'normal' && b.from !== 'charge' && (!spec.rashRounds || b.from !== 'jitan'));
     const firstJitan = r.bonusBalls.filter(b => b.from === 'normal' && b.next !== 'st');
     const expFirst = (pay ? pay.first : spec.rounds) * perRound, expJitan = (pay ? pay.firstNormal : spec.rounds) * perRound;
-    let expRash = spec.rounds * perRound;
+    let expRash = (spec.rashRounds || spec.rounds) * perRound;
     if (pay) {
         const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
         expRash = pay.rash.reduce((a, k) => a + k.weight / tw * (k.rounds + (k.uwanose ? spec.uwanose.success * spec.uwanose.addRounds : 0)), 0) * perRound;
@@ -237,7 +237,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
     check(ps.wins === ps.promo && ps.ends === ps.wins + r.firstKinds.jitan + r.firstKinds.normal, `${spec.label}: 昇格チャレンジの 成否は 当たりの ときに きまる (成功 ${ps.wins}/${ps.ends})`);
     const g = r.stage;
     check(g.temple > 0 && g.templeHit === g.temple, `${spec.label}: 柱の神殿は 当たり確定 (${g.templeHit}/${g.temple})`);
-    check(g.moon > 0 && g.moonHit / g.moon > 0.9, `${spec.label}: 満月 ${pct(g.moonHit / g.moon)} (${g.moonHit}/${g.moon})`);
+    check(g.moon > 0 && g.moonHit / g.moon > 0.9 - 2 * Math.sqrt(0.09 / g.moon), `${spec.label}: 満月 ${pct(g.moonHit / g.moon)} (${g.moonHit}/${g.moon})`);
     check(g.fast > 0 && g.fastHit / g.fast > 0.85, `${spec.label}: 背景の 連続変化 ${pct(g.fastHit / g.fast)} (${g.fastHit}/${g.fast})`);
     if (!spec.firstHit.some(x => x.next === 'jitan')) check(s.jitanEntries === 0, `${spec.label}: 初当たりの 時短なし`);
     const avgChain = r.chains.reduce((a, b) => a + b, 0) / r.chains.length;

@@ -63,6 +63,8 @@ const CONFIG = {
             { type: 'grid', x0: 304, x1: 352, y0: 316, y1: 328, dx: 12, dy: 12, stagger: true },       // 右打ち: ゲートの 下
             { type: 'grid', x0: 300, x1: 356, y0: 396, y1: 424, dx: 13, dy: 12, stagger: true }        // 右打ち: 電チューの 下
         ],
+        // 道釘の 上の 見えない レール (2026-11-04 ユーザー指定: 釘の くぼみに 玉が 止まる のを なくす)。釘の 列より 少し 上を なめらかに 転がる
+        slopeRail: [[30.4, 302.7], [166.4, 340.7]],
         keepout: [
             { type: 'circle', x: 50, y: 272, r: 15 },
             { type: 'rect', x0: 182, x1: 198, y0: 268, y1: 322 },
@@ -86,6 +88,7 @@ const CONFIG = {
             rail: { restitution: 0.15, friction: 0.9998 },
             wall: { restitution: 0.3, friction: 0.9995 },
             stage: { restitution: 0.2, friction: 0.999 },
+            slope: { restitution: 0.2, friction: 0.998 },
             windmill: { restitution: 0.4, friction: 0.9 },
             rubber: { restitution: 0.55, friction: 0.9 }
         },
@@ -145,9 +148,10 @@ const CONFIG = {
     specs: {
         s319: {
             label: '1/319', name: 'ライトスペック',
-            note: 'いつも 3R (約450個)。初当たりの 50% が ST・のこりは 時短100回。ST 継続率 約80%',
+            note: '初当たり・時短は 3R (約450個)、RASH 中は ぜんぶ 10R (1500発)。初当たりの 50% が ST・のこりは 時短100回。ST 継続率 約80%',
             hitRate: 1 / 319.6,
             rounds: 3,
+            rashRounds: 10,   // RASH 中の 当たりは ぜんぶ 10R (1500発。2026-11-04 ユーザー指定)。時短の 当たりは rounds のまま
             charge: { rate: 1 / 200, rounds: 2, st: 0.05 },
             firstHit: [{ weight: 50, next: 'st' }, { weight: 50, next: 'jitan' }],
             jitanSpins: 100,
@@ -157,9 +161,9 @@ const CONFIG = {
             // 柱の氷RASH: 100 回で 当たりを ねらう (1 − (1 − 1/62.6)^100 ≒ 80%)
             hashira: { hitRate: 1 / 62.6, spins: 100 },
             target: { st: 0.5, continuation: 0.8 },
-            // 設定 1〜6 の 釘 (1000円で 約 20 〜 34 回転。3R なので よく 回らないと 勝てない)
-            settings: [{ hesoWidth: 10.4, heso: 0.086 }, { hesoWidth: 11.7, heso: 0.1 }, { hesoWidth: 12.6, heso: 0.113 },
-                { hesoWidth: 13.6, heso: 0.133 }, { hesoWidth: 14.6, heso: 0.154 }, { hesoWidth: 15.7, heso: 0.179 }]
+            // 設定 1〜6 の 釘 (1000円で 約 10 〜 19 回転。RASH 中が 10R なので しめて ある)
+            settings: [{ hesoWidth: 12.5, heso: 0.04 }, { hesoWidth: 12.8, heso: 0.046 }, { hesoWidth: 13.6, heso: 0.053 },
+                { hesoWidth: 13.9, heso: 0.058 }, { hesoWidth: 14, heso: 0.062 }, { hesoWidth: 14.2, heso: 0.074 }]
         },
         s399: {
             label: '1/399', name: 'ミドルスペック',
@@ -188,9 +192,9 @@ const CONFIG = {
             target: { st: 0.5, continuation: 0.75 },
             // 設定 1〜6 の 釘 (設定1〜5 は 1000円で 約 12 〜 19 回転。2026-11-04 ユーザー指定: 時短を なくした ぶん 回転数を ふやした)
             // 設定6 (2026-11-04 ユーザー指定): 確率が 低いので 1/319 の 設定6 より 回す。出玉率は 高く なっても よい
-            settings: [{ hesoWidth: 7.25, heso: 0.047 }, { hesoWidth: 7.3, heso: 0.051 }, { hesoWidth: 8.0, heso: 0.058 },
-                { hesoWidth: 8.2, heso: 0.062 }, { hesoWidth: 10.0, heso: 0.079 }, { hesoWidth: 16.4, heso: 0.203 }],
-            settingRtp: [0.9, 1.0, 1.1, 1.2, 1.35, 2.4]
+            settings: [{ hesoWidth: 12.8, heso: 0.046 }, { hesoWidth: 13.5, heso: 0.05 }, { hesoWidth: 13.9, heso: 0.058 },
+                { hesoWidth: 14, heso: 0.062 }, { hesoWidth: 14.3, heso: 0.078 }, { hesoWidth: 19.5, heso: 0.201 }],
+            settingRtp: [0.9, 1.0, 1.1, 1.2, 1.35, 2.35]
         }
     },
 

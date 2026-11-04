@@ -225,6 +225,7 @@ const Machine = (() => {
         m.jitanLeft = 0;
         let rounds = m.spec.rounds, payKind = null, uwanose = null, promo = null;
         const pay = m.spec.payout;
+        if (m.spec.rashRounds && (from === 'st' || from === 'hst')) rounds = m.spec.rashRounds;
         if (from === 'normal' && fig === 1 && result.promo && typeof Show !== 'undefined') {
             const win = result.next === 'st';
             promo = { ...Show.promoPlan(win, m.rng), win, extra: 0, state: 'wait', timer: 0 };

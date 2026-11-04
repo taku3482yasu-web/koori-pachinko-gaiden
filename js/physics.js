@@ -58,7 +58,7 @@ const Physics = (() => {
         const s = config.ball.surfaces;
         return {
             nail: { ...s.nail, jitter: config.ball.jitter },
-            rail: s.rail, wall: s.wall, stage: s.stage, rubber: s.rubber,
+            rail: s.rail, wall: s.wall, stage: s.stage, slope: s.slope, rubber: s.rubber,
             windmill: { ...s.windmill, jitter: config.ball.jitter }
         };
     }

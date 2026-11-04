@@ -122,6 +122,7 @@ const Board = (() => {
 
         // ----- 右打ちの壁 -----
         segments.push(...polylineSegments(b.rightDivider, 'wall'));
+        if (b.slopeRail) segments.push(...polylineSegments(b.slopeRail, 'slope'));
         // 右打ちの通り道のガイド (ゲート・電チューへ玉を寄せる壁)
         b.guides.forEach(points => polylineSegments(points, 'wall').forEach(sg => segments.push({ ...sg, guide: true })));
 
