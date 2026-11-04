@@ -453,6 +453,9 @@ const Lcd = (() => {
         a.doneAt = st.now;
         return true;
     }
+    // 押してほしいのに まだ 押されて いない (main が 演出を 止めて 待つ)
+    const promptWaiting = () => Boolean(st.action && !st.action.done && !st.holdPrompt);
+    const promptRainbow = () => Boolean(st.action && !st.action.done && st.action.rainbow);
     function prompt() {
         if (st.holdPrompt) return 'push';
         const a = st.action;
@@ -473,7 +476,7 @@ const Lcd = (() => {
                 ctx.fillStyle = 'rgba(0,0,0,0.45)';
                 ctx.fillRect(0, H / 2 - 22, W, 40);
                 const r = 14 + (Math.floor(now * 16) % 2) * 3;
-                ctx.fillStyle = '#ff2a3a';
+                ctx.fillStyle = a.rainbow ? rainbow(now) : '#ff2a3a';
                 ctx.beginPath(); ctx.arc(W / 2 + 70, H / 2 - 2, r, 0, Math.PI * 2); ctx.fill();
                 text('PUSH', W / 2 + 70, H / 2 - 2, 8, '#ffffff', 'center', { bold: true });
                 text('ボタンを 連打！', W / 2 - 20, H / 2 - 4, 18, k < 0.5 ? '#4ab0ff' : '#ffffff', 'center', { bold: true });
@@ -481,7 +484,7 @@ const Lcd = (() => {
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
                 ctx.fillRect(0, H / 2 - 22, W, 44);
                 Art.draw(ctx, 'kanabo', W / 2 + 70, H / 2 + 22, { height: 44, rot: -0.5 - Math.sin(now * 10) * 0.25 });
-                text(a.text || '金棒レバーを 引け！', W / 2 - 14, H / 2 - 4, 18, k < 0.5 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
+                text(a.text || '金棒レバーを 引け！', W / 2 - 14, H / 2 - 4, 18, a.rainbow ? 'rainbow' : k < 0.5 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
                 text('← 台の 右の レバーを 左へ', W / 2 - 14, H / 2 + 14, 9, '#ffffff');
             } else {
                 const r = 18 + Math.sin(now * 12) * 2;
@@ -738,6 +741,7 @@ const Lcd = (() => {
             reels(BIG, figs, [1, 1, 1], now);
         } else {
             if (m.mode === 'st') { stRunners(m, now); reels(TOP, figs, [1, 1, 1], now); }
+            else if (m.mode === 'hst') { hashiraTrio(now); reels(TOP, figs, [1, 1, 1], now); }
             else reels(BIG, figs, [1, 1, 1], now);
         }
         holds(m, now);
@@ -1599,53 +1603,88 @@ const Lcd = (() => {
     }
 
 
-    // ----- 柱の氷RASH (2026-11-04 ユーザー指定: 一発告知・先バレが 主役。ときどき バトル) -----
-    const ALLY_NAMES = { rival: 'ライバル探検隊', onioni: 'おにおに', koori: 'こおりくん' };
+    // ----- 柱の氷RASH (2026-11-04 ユーザー指定: 柱の氷が 主役。基本は 勝負なしで 虹色に フラッシュ。バトルは 一発告知か 虹色の 決め手) -----
+    const RIVAL_NAMES = { onioni: 'おにおに', koori: 'こおりくん' };
+    // 柱の氷の 3 人 (rainbow: 虹色に はげしく フラッシュ)
+    function hashiraTrio(now, rainbowOn = false) {
+        ['haru', 'okadishi', 'kanezu'].forEach((id, i) => {
+            const x = W / 2 - 70 + i * 70, y = H - 20;
+            if (rainbowOn) {
+                ctx.fillStyle = `hsla(${(now * 900 + i * 120) % 360}, 100%, 60%, 0.85)`;
+                ctx.beginPath(); ctx.arc(x, y - 26, 32 + Math.sin(now * 40 + i) * 6, 0, Math.PI * 2); ctx.fill();
+            }
+            Art.draw(ctx, id, x, y, { height: rainbowOn ? 62 : 48, frame: Math.floor(now * (rainbowOn ? 16 : 3)) + i });
+        });
+    }
     function drawHashira(m, plan, el, D, now) {
         background('hashiraRash', now);
         header(m, now);
         if (plan.sub === 'quick') {
-            const stopped = [el > D * 0.4, el > D - 0.2, el > D * 0.6];
-            reels({ y: 64, size: 44, gap: 66 }, plan.hit ? [7, 7, 7] : plan.figures, stopped, now, { speed: 24 });
-            if (plan.hit && el > D - 0.2) text('当たり！', W / 2, 112, 14, 'rainbow', 'center', { bold: true });
+            hashiraTrio(now);
+            reels(TOP, plan.figures, [el > D * 0.4, el > D - 0.2, el > D * 0.6], now, { speed: 24 });
             holds(m, now);
             return;
         }
-        if (plan.sub === 'ippatsu') {
-            // 一発告知: はじまって すぐ いきなり 光って 当たり
-            if (el < 0.3) { reels({ y: 64, size: 44, gap: 66 }, [7, 7, 7], [0, 0, 0], now, { speed: 24 }); return; }
+        if (plan.sub === 'flash') {
+            // 勝負なし: 知らせの あと 柱の氷が 虹色に はげしく フラッシュして 図柄が そろう
+            const f = plan.noticeAt + 0.9, align = D - 1.4;
+            if (el < f) {
+                hashiraTrio(now);
+                reels(TOP, plan.figures, [0, 0, 0], now, { speed: 24 });
+                holds(m, now);
+                return;
+            }
+            if (!st.gimStarted) { st.gimStarted = true; startGimmick('pillars', 3); st.shake = 0.6; }
+            if (el < align) {
+                const c = (now * 900) % 360;
+                ctx.fillStyle = `hsla(${c}, 100%, 55%, 0.6)`;
+                ctx.fillRect(0, 0, W, H);
+                if (Math.floor(now * 16) % 2) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(0, 0, W, H); }
+                hashiraTrio(now, true);
+                reels(TOP, plan.figures, [0, 0, 0], now, { speed: 30 });
+            } else {
+                background('bonus', now);
+                hashiraTrio(now, true);
+                reels({ y: 44, size: 40, gap: 58 }, plan.figures, [1, 1, 1], now, { gold: true });
+                text('当たり！', W / 2, 14, 16, 'rainbow', 'center', { bold: true });
+            }
+            return;
+        }
+        // バトル: 左が 柱の氷、右が 相手
+        const walk = Math.floor(now * 6);
+        if (el < 0.8) { hashiraTrio(now); reels(TOP, plan.figures, [0, 0, 0], now, { speed: 26 }); return; }
+        if (plan.ippatsuAt && el >= plan.ippatsuAt) {
+            // 一発告知
             if (!st.gimStarted) { st.gimStarted = true; startGimmick(Math.random() < 0.5 ? 'pillars' : 'doors', 3.2); st.flash = 1; st.shake = 0.5; }
             background('bonus', now);
-            reels({ y: 66, size: 48, gap: 70 }, [7, 7, 7], [1, 1, 1], now, { gold: true });
+            reels({ y: 66, size: 48, gap: 70 }, plan.figures, [1, 1, 1], now, { gold: true });
             text('一発告知！！', W / 2, 18, 18, 'rainbow', 'center', { bold: true });
             return;
         }
-        // バトル
-        const walk = Math.floor(now * 6);
-        if (el < 0.8) { reels({ y: 64, size: 44, gap: 66 }, [7, 7, 7], [0, 0, 0], now, { speed: 26 }); return; }
         background('battle', now);
-        const chanceAlly = plan.ally !== 'rival';
         const team = TEAMS[(m.stSpins + 1) % TEAMS.length];
-        const allyIds = plan.ally === 'rival' ? team.members : [plan.ally];
+        const rivalIds = plan.rival === 'rival' ? team.members : [plan.rival];
+        const rivalName = plan.rival === 'rival' ? team.name : RIVAL_NAMES[plan.rival];
+        const chanceRival = plan.rival !== 'rival';
         const extra = plan.shuketsu ? 1.5 : 0;
-        // 1) 登場 (0.8〜2.8): 柱の氷 (集結なら 3 人が 1 人ずつ) と 味方
+        // 1) 登場 (0.8〜2.8): 柱の氷 (集結なら 3 人が 1 人ずつ) と 相手
         const k1 = el - 0.8;
         plan.enemies.forEach((id, i) => {
             const appear = clamp01((k1 - i * 0.5) / 0.4);
             if (appear <= 0) return;
-            const x = plan.enemies.length === 1 ? W - 70 : W - 120 + i * 44;
-            Art.draw(ctx, id, x, H - 26, { height: (plan.enemies.length === 1 ? 64 : 52) * ease(appear), frame: walk + i, flip: true });
+            const x = plan.enemies.length === 1 ? 70 : 34 + i * 44;
+            Art.draw(ctx, id, x, H - 26, { height: (plan.enemies.length === 1 ? 64 : 52) * ease(appear), frame: walk + i });
         });
-        allyIds.forEach((id, i) => {
-            const x = allyIds.length === 1 ? 64 : 30 + i * 34;
+        rivalIds.forEach((id, i) => {
+            const x = rivalIds.length === 1 ? W - 64 : W - 100 + i * 34;
             const appear = clamp01((k1 - 0.6) / 0.4);
-            if (appear > 0) Art.draw(ctx, id, x, H - 26, { height: (allyIds.length === 1 ? 50 : 38) * ease(appear), frame: walk + i });
+            if (appear > 0) Art.draw(ctx, id, x, H - 26, { height: (rivalIds.length === 1 ? 50 : 38) * ease(appear), frame: walk + i, flip: true });
         });
         if (k1 < 2 + extra) {
             if (plan.shuketsu && k1 > 0.6) text('柱の氷 集結！！', W / 2, 22, 18, Math.floor(now * 8) % 2 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
-            else if (!plan.shuketsu) text(`VS ${SHOW.enemies[plan.enemies[0]].name}`, W / 2, 22, 13, enemyTextColor(plan.textColor, now), 'center', { bold: true });
-            if (chanceAlly && k1 > 1.2) text(`${ALLY_NAMES[plan.ally]} 参戦！ チャンス！`, W / 2, 42, 11, '#ffd84a', 'center', { bold: true });
-            if (plan.shuketsu && k1 > 1.4) text('大チャンス', W / 2, 42 + (chanceAlly ? 16 : 0), 12, 'rainbow', 'center', { bold: true });
+            else if (!plan.shuketsu) text(`VS ${rivalName}`, W / 2, 22, 13, enemyTextColor(plan.textColor, now), 'center', { bold: true });
+            if (chanceRival && k1 > 1.2) text(`${rivalName} 登場！ チャンス！`, W / 2, 42, 11, '#ffd84a', 'center', { bold: true });
+            if (plan.shuketsu && k1 > 1.4) text('大チャンス', W / 2, 42 + (chanceRival ? 16 : 0), 12, 'rainbow', 'center', { bold: true });
         }
         // 2) わざえらび (一撃 / 連撃。ルーレットの ように 光って きまる)
         const tPick = 2.8 + extra, tDecide = tPick + 1.4;
@@ -1658,9 +1697,10 @@ const Lcd = (() => {
             text('連撃', W / 2 + 40, 67, cur === 'rengeki' ? 18 : 12, cur === 'rengeki' ? '#4ab0ff' : '#666', 'center', { bold: true });
             if (!spinning) text(plan.attack === 'ichigeki' ? '金棒レバーで 一撃！' : 'ボタン 連打で 連撃！', W / 2, 94, 9, '#ffffff', 'center');
         }
-        // 3) 決め手
+        // 3) 決め手 (虹色なら 当たり)
         const aFrom = D - 5.4, aTo = D - 3.0;
-        const a = actionWindow(plan.action, el, aFrom, aTo);
+        const a = plan.ippatsuAt ? null : actionWindow(plan.action, el, aFrom, aTo);
+        if (a) { a.rainbow = plan.rainbow; a.text = 'レバーを引け！'; }
         drawPrompt(a, now);
         if (a && plan.action === 'mash' && !a.done) {
             // 連打の ゲージ
@@ -1670,13 +1710,13 @@ const Lcd = (() => {
             ctx.fillRect(W / 2 - 59, H - 21, 118 * g, 6);
         }
         // 4) けっか
-        if (el >= aTo) {
+        if (el >= aTo && !plan.ippatsuAt) {
             const r = (el - aTo) / (D - aTo);
             if (plan.hit) {
                 ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 0.7 - r * 2)})`;
                 ctx.fillRect(0, 0, W, H);
-                text(plan.shuketsu ? '柱の氷 撃破！！' : '撃破！！', W / 2, 54, 26 * (0.5 + 0.5 * ease(r * 4)), 'rainbow', 'center', { bold: true });
-                reels({ y: 118, size: 18, gap: 22 }, [7, 7, 7], [1, 1, 1], now);
+                text('柱の氷 勝利！！', W / 2, 54, 22 * (0.5 + 0.5 * ease(r * 4)), 'rainbow', 'center', { bold: true });
+                reels({ y: 104, size: 26, gap: 32 }, plan.figures, [1, 1, 1], now);
             } else {
                 ctx.fillStyle = `rgba(0,0,30,${Math.min(0.6, r * 1.2)})`;
                 ctx.fillRect(0, 0, W, H);
@@ -1689,5 +1729,5 @@ const Lcd = (() => {
     // 早送り・テスト用
     function debug() { return st; }
 
-    return { playStory, setHolding, storyActive: () => Boolean(st.story), storySkip: () => { st.story = null; }, setOptions, init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
+    return { promptWaiting, promptRainbow, playStory, setHolding, storyActive: () => Boolean(st.story), storySkip: () => { st.story = null; }, setOptions, init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
 })();

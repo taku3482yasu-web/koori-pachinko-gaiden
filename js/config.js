@@ -200,7 +200,8 @@ const CONFIG = {
     },
 
     // 演出の 数値 (筋書きは js/show.js の SHOW)。lcdZoom: 可動液晶 (見せ場で 液晶が 前へ せり出す) の 大きさ
-    show: { lcdZoom: { scale: 1.42, offsetY: 6 } },
+    // promptWait: 「ボタンを押せ」などを 押さない ときに 演出を 止めて 待つ 秒 (2026-11-04 ユーザー指定: 飛ぶのが 速いので)
+    show: { lcdZoom: { scale: 1.42, offsetY: 6 }, promptWait: 2.5 },
 
     machine: {
         holdMax: 4,
