@@ -9,7 +9,8 @@
 //   大当たりは spec.rounds ラウンド (1/319 は いつも 3R)。spec.payout が ある 台 (1/399) は 初当たり 20R・RASH 中は 振り分け、
 //   上乗せタイム (spec.uwanose) が 成功すると ラウンドが ふえる (できごと uwanoseStart → iwakan → uwanose / uwanoseEnd)
 //   昇格チャレンジ (2026-11-04 ユーザー指定): 通常時の ヘソの 偶数図柄の 当たりの あと (result.promo)。結果は 当たりの ときに きまっている (result.next === 'st' なら 成功)。
-//     さいごの ラウンドの あとに phase 'promo'。成功なら RASH へ (1/399 は 1500発 → 3000発に 昇格して ラウンドが ふえる)
+//     1 ラウンド目から ラウンド中に 液晶で おこなう (アタッカーは 開いたまま。ラウンドの あとだと 1/399 は 出玉で 結果が わかるため)。
+//     成功なら RASH へ (1/399 は 1500発 → 3000発に 昇格して ラウンドが ふえる)。ラウンドが 先に おわったら チャレンジの おわりを 待つ (phase 'promoWait')
 //   チャージ (2026-11-04 ユーザー指定。spec.charge): 通常時の ヘソの 低確率の 当たり (result.kind 'charge')。300発 (2R) を 右打ちで。spec.charge.st (5%) で ST、のこりは 通常時へ (回転数・連チャンは そのまま)
 //   ST は 2 つ (2026-11-04 ユーザー指定)。ST に 入る 大当たりの あいだに えらぶ (m.rashType。Machine.setRashType):
 //     おにおにRASH ('onioni'。mode 'st'): 上の 転落型
@@ -225,7 +226,7 @@ const Machine = (() => {
         const pay = m.spec.payout;
         if (from === 'normal' && fig === 1 && result.promo && typeof Show !== 'undefined') {
             const win = result.next === 'st';
-            promo = { ...Show.promoPlan(win, m.rng), win, extra: 0, done: false };
+            promo = { ...Show.promoPlan(win, m.rng), win, extra: 0, state: 'wait', timer: 0 };
         }
         if (pay && from === 'normal') {
             rounds = result.next === 'st' && !promo ? pay.first : pay.firstNormal;
@@ -293,21 +294,37 @@ const Machine = (() => {
         emit(m, 'ending', { next: b.next, chain: m.chain, from: b.from, charge: Boolean(b.charge) });
     }
 
+    // 昇格チャレンジ (ラウンド中に すすむ)
+    function updatePromo(m, dt, cfg) {
+        const b = m.bonus, p = b.promo;
+        if (!p || p.state !== 'run') return;
+        p.timer -= dt;
+        if (p.timer > 0) return;
+        p.state = 'done';
+        if (p.win) m.stats.promoWins++;
+        if (p.win && p.extra) {
+            b.rounds += p.extra;
+            m.stats.bonusRounds += p.extra;
+        }
+        emit(m, 'promoEnd', { win: p.win, extra: p.extra, rounds: b.rounds });
+        if (b.phase === 'promoWait') {
+            if (b.round < b.rounds) { b.phase = 'interval'; b.timer = cfg.interval; }
+            else toEnding(m, b, cfg);
+        }
+    }
+
     function updateBonus(m, dt) {
         const cfg = m.config.machine.bonus;
         const b = m.bonus;
         b.timer -= dt;
         updateUwanose(m, dt);
+        updatePromo(m, dt, cfg);
         if (b.phase === 'open') {
             if (b.count < cfg.count && b.timer > 0) return;
             emit(m, 'roundEnd', { round: b.round, count: b.count });
             if (b.round >= b.rounds && !(b.uwanose && b.uwanose.phase === 'time')) {
-                if (b.promo && !b.promo.done) {
-                    b.phase = 'promo';
-                    b.timer = cfg.promo;
-                    m.stats.promos++;
-                    emit(m, 'promoStart', { promo: b.promo });
-                } else toEnding(m, b, cfg);
+                if (b.promo && b.promo.state === 'run') b.phase = 'promoWait';
+                else toEnding(m, b, cfg);
             } else {
                 b.phase = 'interval';
                 b.timer = cfg.interval;
@@ -315,24 +332,18 @@ const Machine = (() => {
             return;
         }
         if (b.timer > 0) return;
-        if (b.phase === 'promo') {
-            b.promo.done = true;
-            if (b.promo.win) m.stats.promoWins++;
-            emit(m, 'promoEnd', { win: b.promo.win, extra: b.promo.extra });
-            if (b.promo.win && b.promo.extra) {
-                b.rounds += b.promo.extra;
-                m.stats.bonusRounds += b.promo.extra;
-                b.phase = 'interval';
-                b.timer = cfg.interval;
-            } else toEnding(m, b, cfg);
-            return;
-        }
         if (b.phase === 'opening' || b.phase === 'interval') {
             b.round++;
             b.count = 0;
             b.phase = 'open';
             b.timer = cfg.maxTime;
             emit(m, 'roundStart', { round: b.round, rounds: b.rounds });
+            if (b.promo && b.promo.state === 'wait') {
+                b.promo.state = 'run';
+                b.promo.timer = cfg.promo;
+                m.stats.promos++;
+                emit(m, 'promoStart', { promo: b.promo });
+            }
             if (b.uwanose && b.uwanose.phase === 'wait' && b.round >= b.uwanose.round) {
                 b.uwanose.phase = 'time';
                 emit(m, 'uwanoseStart', { window: m.spec.uwanose.window });
