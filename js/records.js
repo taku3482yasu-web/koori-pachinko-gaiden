@@ -25,6 +25,8 @@ const Records = (() => {
         { id: 'balls20000', name: '一撃 20000発', desc: '1 回の 連チャンで 20000発 出す', stat: 'bestBalls', value: 20000 },
         { id: 'charge', name: 'チャージ', desc: 'チャージを 引く', stat: 'charges', value: 1 },
         { id: 'chargeSt', name: 'チャージから RASH', desc: 'チャージから RASH に 入る', stat: 'chargeSt', value: 1 },
+        { id: 'promo', name: '昇格', desc: '昇格チャレンジで こおりくんの 影を 撃破する', stat: 'promoWins', value: 1 },
+        { id: 'ending', name: 'こおりくん 救出', desc: 'エンディングを 見る', stat: 'endings', value: 1 },
         { id: 'yutime', name: '遊タイム', desc: '遊タイムに 入る', stat: 'yutimes', value: 1 },
         { id: 'sango', name: '1・3・5', desc: '図柄が 1・3・5 で そろう', stat: 'seen:premium:sango', value: 1 },
         { id: 'temple', name: '柱の神殿', desc: '背景が 柱の神殿に なる', stat: 'seen:stage:temple', value: 1 },

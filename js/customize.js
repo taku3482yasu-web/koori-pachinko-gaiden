@@ -15,6 +15,7 @@ const Customize = (() => {
             choices: { often: 'よくしゃべる', normal: 'ふつう', off: 'しゃべらない' }, default: 'normal' },
         leverBuru: { label: 'レバブル', group: '演出', note: 'リーチの ときに 金棒レバーが ぶるぶる 震える ことが ある',
             choices: { on: 'あり', off: 'なし' }, default: 'on' },
+        opening: { label: 'オープニング', group: '演出', note: '台を えらんだ ときに 流す', choices: { on: 'あり', off: 'なし' }, default: 'on' },
         fx: { label: '演出の強さ', group: '演出', note: '控えめ: レバー・ボタンの 震えと 本体の 振動・可動液晶を 出さない',
             choices: { quiet: '控えめ', normal: 'ふつう' }, default: 'normal' },
         lcdZoom: { label: '可動液晶', group: '演出', note: 'バトルや 大当たりの はじまりで 液晶が 前に せり出す',

@@ -202,7 +202,7 @@ const CONFIG = {
         // 変動の 時間 (秒)。通常時は 演出で きまる (show.js)。ST・時短中は 速い
         spin: { fast: 1.6, battle: 9 },
         // 大当たり: opening → ラウンド (count 個か maxTime 秒) → interval → … → ending
-        bonus: { opening: 4, count: 10, maxTime: 25, interval: 1.2, ending: 5, chargeOpening: 1.6, chargeEnding: 1.5 },
+        bonus: { opening: 4, count: 10, maxTime: 25, interval: 1.2, ending: 5, chargeOpening: 1.6, chargeEnding: 1.5, promo: 15.5 },
         // 普図 (ゲート → 電チュー)。support = ST・時短中 (電サポ)
         futsu: {
             normal: { rate: 1 / 16, spin: 12, opens: 1, open: 0.2, gap: 0 },

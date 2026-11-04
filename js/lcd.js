@@ -159,6 +159,9 @@ const Lcd = (() => {
             ctx.fillStyle = '#10182a';
             ctx.fillRect(0, H - 24, W, 24);
             snow(now, 20, 6, -4, 'rgba(180,220,255,0.6)');
+        } else if (id === 'black') {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, W, H);
         } else if (id === 'arcade') {
             // ゲームセンター: 暗い 店内に ならぶ きょう体と ネオン
             sky('#12082a', '#2a1048');
@@ -429,6 +432,7 @@ const Lcd = (() => {
         return true;
     }
     function prompt() {
+        if (st.holdPrompt) return 'push';
         const a = st.action;
         return a && !a.done ? a.kind : null;
     }
@@ -561,6 +565,8 @@ const Lcd = (() => {
             st.action = null;
             st.gimStarted = false;
             st.hashiraFlash = false;
+            st.crackSnap = null;
+            st.crackSmash = false;
             if (e.plan.yaku && e.plan.kind === 'normal') st.gimPlanned = true;
             if (e.plan.story !== undefined) {
                 const s = SHOW.stories[e.plan.story];
@@ -588,6 +594,10 @@ const Lcd = (() => {
             startGimmick('kanabo', 2.4);
         } else if (e.type === 'uwanoseEnd') {
             if (st.uwanose) { st.uwanose.state = 'lose'; st.uwanose.end = st.now; }
+        } else if (e.type === 'promoStart') {
+            Object.assign(st, { action: null, promoGauge: 0, promoLast: 0, promoFlash: false, promoHit: false });
+        } else if (e.type === 'promoEnd') {
+            st.holdPrompt = false;
         } else if (e.type === 'roundStart') {
             if (st.bonus) { st.bonus.round = e.round; st.bonus.count = 0; }
         } else if (e.type === 'count') {
@@ -639,6 +649,7 @@ const Lcd = (() => {
         lt = m.spec.lt ? ' LT' : '';
         ctx.setTransform(S, 0, 0, S, 0, 0);
         ctx.imageSmoothingEnabled = false;
+        if (st.story && drawStory(now)) return;
         const sh = st.shake > 0 ? (Math.random() - 0.5) * 4 : 0;
         ctx.save();
         ctx.translate(sh, 0);
@@ -777,14 +788,7 @@ const Lcd = (() => {
             if (plan.gizi && el >= t.gizi && el < t.gun) drawNext(el - t.gizi, now);
             else if (plan.gizi && el < tR) text(`疑似${plan.gizi + 1}連`, 6, 18, 9, plan.gizi >= 3 ? 'rainbow' : plan.gizi === 2 ? '#ff6a8a' : '#7fd3f7', 'left', { bold: true });
             if (!plan.step || el >= t.gizi) drawLine(plan.line, el, now);
-            if (plan.sango && el >= end) {
-                // 1・3・5 そろい: 当たり確定で RASH へ
-                if (!st.gimStarted) { st.gimStarted = true; st.flash = 1; st.shake = 0.8; startGimmick('pillars', 3.2); }
-                ctx.fillStyle = 'rgba(0,0,0,0.55)';
-                ctx.fillRect(0, 96, W, 38);
-                text('1・3・5 そろい！', W / 2, 106, 15, 'rainbow', 'center', { bold: true });
-                text('当たり確定！ RASH へ！', W / 2, 124, 11, '#ffd84a', 'center', { bold: true });
-            }
+            if (plan.sango && el >= end) return drawCrack(el - end, figs, now);
             if (plan.post && el >= end) {
                 if (!st.gimStarted) { st.gimStarted = true; st.flash = 1; }
                 text('後告知！！', W / 2, 18, 18, 'rainbow', 'center', { bold: true });
@@ -807,6 +811,201 @@ const Lcd = (() => {
         }
         holds(m, now);
     }
+
+    // 1・3・5 そろい (2026-11-04 ユーザー指定): 画面が ひび割れて → おにおにの 究極形態が 出現 → 画面を 粉砕 → 咆哮 → おめでとう！
+    // 究極形態 = カードゲームで いちばん 強い 進化「おにおに・鬼の王 覚醒」(ユーザー指定)。カードと おなじく おにおにの 絵に 炎と 鎖
+    function kakusei(x, y, height, now) {
+        seed = 15;
+        for (let i = 0; i < 14; i++) {
+            const h = height * (0.45 + 0.35 * rnd()) * (0.85 + 0.15 * Math.sin(now * 14 + i));
+            ctx.fillStyle = i % 2 ? 'rgba(255, 138, 42, 0.85)' : 'rgba(255, 58, 26, 0.85)';
+            ctx.fillRect(x - height * 0.62 + i * height * 0.09, y - h, height * 0.08, h);
+        }
+        Art.draw(ctx, 'onioni', x, y, { height, frame: Math.floor(now * 10) });
+        // ちぎれた 鎖
+        ctx.fillStyle = '#c8c8d8';
+        for (let i = 0; i < 6; i++) {
+            ctx.fillRect(x - height * 0.7 - i * 9, y - height * 0.5 - i * 5, 6, 3);
+            ctx.fillRect(x + height * 0.7 + i * 9, y - height * 0.5 - i * 5, 6, 3);
+        }
+    }
+    const CRACK_LINE = [[136, 0], [122, 22], [146, 42], [118, 66], [150, 92], [126, 116], [140, 138]];
+    function crackPath(n) {
+        ctx.beginPath();
+        CRACK_LINE.slice(0, n).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.stroke();
+    }
+    function drawCrack(k, figs, now) {
+        const T = SHOW.crack;
+        if (k < T.crack) {
+            // ひびが 上から 走る
+            if (!st.crackSnap) {
+                st.crackSnap = document.createElement('canvas');
+                st.crackSnap.width = canvas.width;
+                st.crackSnap.height = canvas.height;
+                st.crackSnap.getContext('2d').drawImage(canvas, 0, 0);
+                st.shake = 0.3;
+            }
+            const n = 1 + Math.ceil(k / T.crack * (CRACK_LINE.length - 1));
+            ctx.strokeStyle = '#ff3a2a'; ctx.lineWidth = 3; crackPath(n);
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; crackPath(n);
+            return;
+        }
+        if (k < T.emerge) {
+            // すき間が ひらいて 赤い 光の 中から 究極形態
+            const e = (k - T.crack) / (T.emerge - T.crack), gap = ease(e) * 70;
+            ctx.fillStyle = '#3a0008';
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = `rgba(255, 40, 30, ${0.4 + 0.3 * Math.sin(now * 20)})`;
+            ctx.fillRect(W / 2 - gap, 0, gap * 2, H);
+            kakusei(W / 2, H + 20 - 150 * ease(e) * 0.5 - 30, 60 + 60 * e, now);
+            if (st.crackSnap) {
+                const sw = canvas.width / 2;
+                ctx.drawImage(st.crackSnap, 0, 0, sw, canvas.height, -gap, 0, W / 2, H);
+                ctx.drawImage(st.crackSnap, sw, 0, sw, canvas.height, W / 2 + gap, 0, W / 2, H);
+            }
+            return;
+        }
+        if (k < T.smash) {
+            // 画面を 粉砕: かけらが とびちる
+            const e = (k - T.emerge) / (T.smash - T.emerge);
+            if (!st.crackSmash) { st.crackSmash = true; st.flash = 1; st.shake = 1.2; }
+            ctx.fillStyle = '#2a0006';
+            ctx.fillRect(0, 0, W, H);
+            kakusei(W / 2, H - 4, 120, now);
+            seed = 12;
+            for (let i = 0; i < 40; i++) {
+                const a = rnd() * Math.PI * 2, d = e * (120 + rnd() * 180), s = 6 + rnd() * 14;
+                ctx.fillStyle = i % 3 ? '#bfe8ff' : '#ffffff';
+                ctx.fillRect(W / 2 + Math.cos(a) * d - s / 2, H / 2 + Math.sin(a) * d - s / 2, s, s * 0.7);
+            }
+            return;
+        }
+        if (k < T.roar) {
+            // 咆哮
+            st.shake = Math.max(st.shake, 0.3);
+            ctx.fillStyle = Math.floor(now * 10) % 2 ? '#7a0010' : '#a80018';
+            ctx.fillRect(0, 0, W, H);
+            for (let i = 0; i < 16; i++) {
+                const a = now * 2 + i / 16 * Math.PI * 2;
+                ctx.strokeStyle = 'rgba(255, 216, 74, 0.35)'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(W / 2, 50); ctx.lineTo(W / 2 + Math.cos(a) * 300, 50 + Math.sin(a) * 300); ctx.stroke();
+            }
+            kakusei(W / 2, H - 2, 118 + Math.sin(now * 30) * 3, now);
+            text('おにおに・鬼の王 覚醒', W / 2, 16, 17, '#ffd84a', 'center', { bold: true });
+            text('グオオオオッ！！', W / 2, H - 14, 14, '#ffffff', 'center', { bold: true });
+            return;
+        }
+        // おめでとう！
+        const e = k - T.roar;
+        background('bonus', now);
+        reels({ y: 62, size: 44, gap: 62 }, figs, [1, 1, 1], now, { gold: true });
+        text('おめでとう！', W / 2, 116, 24 * (0.6 + 0.4 * ease(e * 2)), 'rainbow', 'center', { bold: true });
+    }
+
+    // 昇格チャレンジ (2026-11-04 ユーザー指定): おにおに vs こおりくんの 影。左の ゲージ (青 < 緑 < 紫 < 赤 < 虹) を ボタン長押しで ためる (押さなくても 結果は おなじ)。
+    //   色が きまったら 激突して ボタンか レバー (レバーは 確定)。成功なら ゲージが 虹色に フラッシュして 撃破 → RASH
+    function drawPromo(m, now) {
+        const P = SHOW.promo, T = P.time, b = m.bonus, pr = b.promo, t = m.config.machine.bonus.promo - b.timer;
+        const final = P.gauge.indexOf(pr.color) + 1;
+        const dt = st.promoLast ? Math.max(0, now - st.promoLast) : 0;
+        st.promoLast = now;
+        // ゲージ: ゆっくり のびる。長押しで はやく のびる。とまるのは きまった 色
+        const auto = final * clamp01((t - T.intro) / (T.charge - T.intro));
+        st.promoGauge = Math.min(final, Math.max(st.promoGauge || 0, auto) + (st.holding && t >= T.intro ? dt * 1.5 : 0));
+        if (t >= T.charge) st.promoGauge = final;
+        st.holdPrompt = t >= T.intro && t < T.charge;
+        background('hideout', now);
+        ctx.fillStyle = 'rgba(30, 0, 50, 0.55)';
+        ctx.fillRect(0, 0, W, H);
+        const rush = ease((t - T.decide) / (T.clash - T.decide - 1.2));
+        const walk = Math.floor(now * 6);
+        Art.draw(ctx, 'onioni', 84 + (W / 2 - 24 - 84) * rush, H - 26, { height: 56, frame: walk });
+        const sx = W - 56 - (W - 56 - W / 2 - 24) * rush;
+        const won = pr.win && t >= T.clash;
+        if (!won || Math.floor(now * 12) % 2) {
+            ctx.fillStyle = 'rgba(160, 60, 255, 0.25)';
+            ctx.beginPath(); ctx.arc(sx, H - 56, 42, 0, Math.PI * 2); ctx.fill();
+            Art.draw(ctx, 'koori', sx, H - 26, { height: 64, silhouette: true, flip: true });
+            ctx.fillStyle = '#ff2a3a';
+            ctx.fillRect(sx - 14, H - 66, 6, 4);
+            ctx.fillRect(sx + 4, H - 66, 6, 4);
+        }
+        // ゲージ
+        const gx = 10, gy = 22, gh = H - 40, seg = gh / 5;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(gx - 2, gy - 2, 20, gh + 4);
+        for (let i = 0; i < 5; i++) {
+            const fill = clamp01(st.promoGauge - i), c = P.gauge[i];
+            if (fill <= 0) continue;
+            ctx.fillStyle = won ? rainbow(now, i) : c === 'rainbow' ? rainbow(now, i) : P.colors[c];
+            ctx.fillRect(gx, gy + gh - i * seg - seg * fill, 16, seg * fill - 1);
+        }
+        if (won) { ctx.strokeStyle = rainbow(now); ctx.lineWidth = 3; ctx.strokeRect(gx - 3, gy - 3, 22, gh + 6); }
+        if (t < T.intro) {
+            ctx.fillStyle = `rgba(0,0,0,${0.6 * ease(t * 3)})`;
+            ctx.fillRect(0, 26, W, 46);
+            text('昇格チャレンジ', W / 2, 42, 20, '#ffd84a', 'center', { bold: true });
+            text('こおりくんの 影を 撃破せよ！', W / 2, 62, 11, '#ffffff');
+        } else if (t < T.charge) {
+            text('ボタン 長押しで ためろ！', W / 2 + 12, 18, 13, Math.floor(now * 4) % 2 ? '#ffd84a' : '#ffffff', 'center', { bold: true });
+        } else if (t < T.decide) {
+            if (pr.color === 'rainbow' && !st.promoFlash) { st.promoFlash = true; st.flash = 1; }
+            text(`${P.names[pr.color]} ゲージ！`, W / 2 + 12, 40, 22, pr.color === 'rainbow' ? 'rainbow' : P.colors[pr.color], 'center', { bold: true });
+        } else if (t < T.clash) {
+            const a = actionWindow(pr.action, t, T.decide + 1.2, T.clash);
+            if (a) a.text = 'レバーを引け！';
+            text('激突！！', W / 2, 18, 15, '#ff3a4a', 'center', { bold: true });
+            drawPrompt(a, now);
+        } else {
+            const r = t - T.clash;
+            if (pr.win) {
+                if (!st.promoHit) { st.promoHit = true; st.flash = 1; st.shake = 0.8; }
+                text('撃破！！', W / 2, 44, 28 * (0.6 + 0.4 * ease(r * 3)), 'rainbow', 'center', { bold: true });
+                text(pr.extra ? '昇格！ 3000発 + RASH 突入！' : '昇格！ RASH 突入！', W / 2, 72, 12, '#ffd84a', 'center', { bold: true });
+            } else {
+                ctx.fillStyle = `rgba(0,0,20,${Math.min(0.6, r)})`;
+                ctx.fillRect(0, 0, W, H);
+                text('おにおにが はじきとばされた…', W / 2, 56, 12, '#c8d8ff');
+            }
+        }
+    }
+
+    // オープニング・エンディング (2026-11-04 ユーザー指定)
+    function playStory(name, chain) {
+        const scenes = SHOW.story[name];
+        st.story = { name, scenes, start: st.now, total: scenes.reduce((a, s) => a + s.dur, 0), chain };
+    }
+    function drawStory(now) {
+        const s = st.story;
+        let t = now - s.start;
+        if (t >= s.total) { st.story = null; return false; }
+        const sc = s.scenes.find(x => (t -= x.dur) < 0);
+        const k = t + sc.dur, fade = Math.min(clamp01(k / 0.5), clamp01((sc.dur - k) / 0.4));
+        background(sc.bg, now);
+        const n = sc.who.length;
+        sc.who.forEach((id, i) => Art.draw(ctx, id, W / 2 + (i - (n - 1) / 2) * Math.min(56, 220 / n), H - 34, { height: n > 3 ? 44 : 58, frame: Math.floor(now * 3) + i, silhouette: sc.shadow }));
+        if (sc.text) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, H - 30, W, 24);
+            text(sc.text, W / 2, H - 18, 11, '#ffffff');
+        }
+        if (sc.title) {
+            text('こおりくんの大冒険外伝', W / 2, 32, 12, '#bfe8ff', 'center', { bold: true });
+            text('おにおにの挑戦', W / 2, 64, 30 * (0.6 + 0.4 * ease(k * 2)), '#ff3a4a', 'center', { bold: true, strokeColor: '#ffffff' });
+            text('～めざめる３人の氷達～', W / 2, 96, 13, '#9cf0c8', 'center', { bold: true });
+        }
+        if (sc.end) {
+            text(`${s.chain || 10}連 おめでとう！`, W / 2, 34, 22, 'rainbow', 'center', { bold: true });
+            text('THE END', W / 2, 62, 16, '#ffffff', 'center', { bold: true });
+            text('…RASH は まだ つづく！', W / 2, 122, 11, '#ffd84a', 'center', { bold: true });
+        }
+        ctx.fillStyle = `rgba(0,0,0,${1 - fade})`;
+        ctx.fillRect(0, 0, W, H);
+        text('PUSH で とばす', W - 4, 7, 7, '#c8d8ff', 'right');
+        return true;
+    }
+    const setHolding = v => { st.holding = v; };
 
     // ステップアップ予告 (前作から): キャラが 1 段ずつ 出る。3 段目の 文字が 赤なら チャンス・金なら 約 90%
     function drawStep(s, k, now) {
@@ -1163,6 +1362,7 @@ const Lcd = (() => {
 
     // ----- 大当たり -----
     function drawBonus(m, now) {
+        if (m.bonus && m.bonus.phase === 'promo') return drawPromo(m, now);
         const b = st.bonus || { rounds: m.bonus.rounds, round: m.bonus.round, count: m.bonus.count, next: m.bonus.next, from: m.bonus.from, chain: m.chain, start: now, charge: m.bonus.charge };
         background('bonus', now);
         const el = now - b.start;
@@ -1206,7 +1406,7 @@ const Lcd = (() => {
             reels({ y: 70, size: 44 + Math.sin(el * 6) * 2, gap: 62 }, fig, [1, 1, 1], now, { gold: true });
             text('大当たり', W / 2, 18, 18 * (0.6 + 0.4 * ease(el * 2)), 'rainbow', 'center', { bold: true });
             const odd = fig[0] % 2 === 1;
-            if (b.from === 'normal') text(odd ? 'ST 確定！' : b.next === 'normal' ? '' : '時短 チャンス', W / 2, 122, 11, odd ? '#ff6a8a' : '#7ad8ff', 'center', { bold: true });
+            if (b.from === 'normal') text(odd ? 'ST 確定！' : m.bonus.promo ? '昇格チャレンジへ！' : '時短 チャンス', W / 2, 122, 11, odd ? '#ff6a8a' : '#7ad8ff', 'center', { bold: true });
             else if (b.from === 'st') text(`${b.chain}連 撃破！`, W / 2, 122, 11, '#ffd84a', 'center', { bold: true });
             // 出玉 (1/399): 3000発 / 1500発
             if (b.payKind) text(`${b.rounds * 150}発`, W / 2, 108, 12, b.rounds >= 20 ? 'rainbow' : '#ffffff', 'center', { bold: true });
@@ -1427,5 +1627,5 @@ const Lcd = (() => {
     // 早送り・テスト用
     function debug() { return st; }
 
-    return { setOptions, init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
+    return { playStory, setHolding, storyActive: () => Boolean(st.story), storySkip: () => { st.story = null; }, setOptions, init, handle, draw, tick, prompt, input, gimmick, startGimmick, banner, trophy, debug, W, H, S, FIG_CHARS, get canvas() { return canvas; } };
 })();
