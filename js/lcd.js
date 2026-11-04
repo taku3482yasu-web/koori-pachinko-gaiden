@@ -458,6 +458,7 @@ const Lcd = (() => {
     const promptRainbow = () => Boolean(st.action && !st.action.done && st.action.rainbow);
     function prompt() {
         if (st.holdPrompt) return 'push';
+        if (st.uwanose && st.uwanose.state === 'time' && !st.uwanose.lever) return 'lever';
         const a = st.action;
         return a && !a.done ? a.kind : null;
     }
@@ -619,8 +620,12 @@ const Lcd = (() => {
             if (!e.charge && !st.gim && (e.from === 'normal' || Math.random() < 0.35)) startGimmick(e.from === 'normal' ? 'pillars' : 'kanabo', 3.2);
         } else if (e.type === 'uwanoseStart') {
             st.uwanose = { start: st.now, window: e.window, state: 'time' };
-        } else if (e.type === 'iwakan') {
-            if (st.uwanose) { st.uwanose.state = 'iwakan'; st.uwanose.iwakan = st.now; }
+        } else if (e.type === 'uwanoseLever') {
+            if (st.uwanose) { st.uwanose.lever = true; if (e.oneshot) { st.uwanose.state = 'oneshot'; st.flash = 1; } }
+        } else if (e.type === 'goldFlash') {
+            if (st.uwanose) { st.uwanose.state = 'gold'; st.uwanose.gold = st.now; }
+            st.shake = 0.8;
+            startGimmick('kanabo', 2.4);
         } else if (e.type === 'uwanose') {
             if (st.uwanose) { st.uwanose.state = 'win'; st.uwanose.end = st.now; }
             if (st.bonus) st.bonus.rounds = e.rounds;
@@ -1571,7 +1576,18 @@ const Lcd = (() => {
         drawUwanose(now);
     }
 
-    // 上乗せタイム (1/399 の RASH 中の 大当たり): のこり 秒の ゲージ。違和感 (液晶が ブツッと 消える) が 起きたら 成功 → +1500発
+    // 上乗せジャッジ (1/399 の RASH 中の 大当たり): のこり 秒の ゲージ。黄金フラッシュが 起きたら 成功 → +1500発。
+    //   成功が きまっている ゲームで レバーを 引くと 25% で 一発告知 (おめでとう！ と 金色に はげしく フラッシュ → 黄金フラッシュ確定)
+    function goldRays(now) {
+        for (let i = 0; i < 18; i++) {
+            const a = now * 1.2 + i / 18 * Math.PI * 2;
+            ctx.fillStyle = i % 2 ? 'rgba(255, 250, 200, 0.5)' : 'rgba(255, 200, 40, 0.4)';
+            ctx.beginPath(); ctx.moveTo(W / 2, H / 2);
+            ctx.lineTo(W / 2 + Math.cos(a) * 300, H / 2 + Math.sin(a) * 300);
+            ctx.lineTo(W / 2 + Math.cos(a + 0.18) * 300, H / 2 + Math.sin(a + 0.18) * 300);
+            ctx.fill();
+        }
+    }
     function drawUwanose(now) {
         const u = st.uwanose;
         if (!u) return;
@@ -1579,19 +1595,24 @@ const Lcd = (() => {
             const left = Math.max(0, u.window - (now - u.start));
             ctx.fillStyle = 'rgba(40,0,60,0.7)';
             ctx.fillRect(0, 16, W, 30);
-            text('上乗せタイム', W / 2 - 40, 26, 13, Math.floor(now * 4) % 2 ? '#ffd84a' : '#ff6a8a', 'center', { bold: true });
-            text(`${Math.ceil(left)}`, W / 2 + 46, 30, 22, '#ffffff', 'center', { bold: true });
+            text('上乗せジャッジ', W / 2 - 40, 26, 13, Math.floor(now * 4) % 2 ? '#ffd84a' : '#ff6a8a', 'center', { bold: true });
+            text(`${Math.ceil(left)}`, W / 2 + 62, 30, 22, '#ffffff', 'center', { bold: true });
             ctx.fillStyle = '#ffd84a';
             ctx.fillRect(10, 41, (W - 20) * left / u.window, 3);
-            text('違和感が 起きたら 上乗せ！', W / 2, 52, 8, '#ffffff');
-        } else if (u.state === 'iwakan') {
-            // 違和感: 液晶が ブツッと 消えて ノイズ
-            ctx.fillStyle = '#000000';
+            text('黄金フラッシュで 上乗せ！', W / 2, 52, 8, '#ffffff');
+            if (!u.lever) text('レバーを引け！', W / 2, 64, 10, Math.floor(now * 6) % 2 ? '#ff3a4a' : '#ffd84a', 'center', { bold: true });
+        } else if (u.state === 'oneshot') {
+            // 一発告知: 金色に はげしく フラッシュ
+            ctx.fillStyle = Math.floor(now * 16) % 2 ? '#ffd23a' : '#fff6c0';
             ctx.fillRect(0, 0, W, H);
-            for (let i = 0; i < 40; i++) {
-                ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#555566';
-                ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 20, 1);
-            }
+            goldRays(now);
+            text('おめでとう！', W / 2, H / 2, 30, '#a86a00', 'center', { bold: true, strokeColor: '#ffffff' });
+        } else if (u.state === 'gold') {
+            // 黄金フラッシュ
+            ctx.fillStyle = Math.floor(now * 10) % 2 ? '#ffc820' : '#ffe680';
+            ctx.fillRect(0, 0, W, H);
+            goldRays(now);
+            text('黄金フラッシュ！！', W / 2, H / 2, 22, '#ffffff', 'center', { bold: true, strokeColor: '#a86a00' });
         } else {
             const k = now - u.end;
             if (k > 3) { st.uwanose = null; return; }

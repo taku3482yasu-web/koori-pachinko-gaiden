@@ -226,8 +226,8 @@ for (const specId of Object.keys(CONFIG.specs)) {
     if (pay) {
         const tw = pay.rash.reduce((a, k) => a + k.weight, 0);
         const share = r.uw.n / rashBonus.length, expShare = pay.rash.filter(k => k.uwanose).reduce((a, k) => a + k.weight, 0) / tw;
-        check(near(share, expShare, 3 * Math.sqrt(0.25 / r.uw.n)), `${spec.label}: 上乗せタイムの 発生 ${pct(share)} (目標 ${pct(expShare)})`);
-        check(r.uw.win + r.uw.lose === r.uw.n && near(r.uw.win / r.uw.n, spec.uwanose.success, 3 * Math.sqrt(0.25 / r.uw.n)), `${spec.label}: 上乗せタイムの 成功 ${pct(r.uw.win / r.uw.n)} (${r.uw.win}/${r.uw.n})`);
+        check(near(share, expShare, 3 * Math.sqrt(0.25 / r.uw.n)), `${spec.label}: 上乗せジャッジの 発生 ${pct(share)} (目標 ${pct(expShare)})`);
+        check(r.uw.win + r.uw.lose === r.uw.n && near(r.uw.win / r.uw.n, spec.uwanose.success, 3 * Math.sqrt(0.25 / r.uw.n)), `${spec.label}: 上乗せジャッジの 成功 ${pct(r.uw.win / r.uw.n)} (${r.uw.win}/${r.uw.n})`);
         const counts = {};
         rashBonus.forEach(b => { counts[b.balls] = (counts[b.balls] || 0) + 1; });
         console.log(`      RASH・時短の 出玉: ${Object.entries(counts).map(([k, v]) => `${k}個 ${pct(v / rashBonus.length)}`).join('・')}`);
@@ -475,6 +475,35 @@ for (const specId of Object.keys(CONFIG.specs)) {
     const a = trust('onioni'), b = trust('koori');
     check(b > a + 0.1, `こおりくんモードの 先バレ ${pct(b)} > おにおにモード ${pct(a)}`);
 }
+// 上乗せジャッジの レバー: 成功の ゲームの 25% で 一発告知 (失敗の ゲームでは 出ない)
+{
+    const judge = (win, seed) => {
+        const u = Machine.create(CONFIG, 's399', seeded(seed));
+        Machine.debugMode(u, 'st');
+        Machine.debugHold(u, 'hit', { pay: 'uwanose', uwanose: win, enemy: 'haru' });
+        for (let i = 0; i < 30 * 60 && !u.bonus; i++) Machine.update(u, 1 / 30);
+        Machine.skipBonus(u);
+        u.events.length = 0;
+        const shot = Machine.uwanoseLever(u), again = Machine.uwanoseLever(u);
+        const t0 = u.bonus.uwanose.t;
+        let flashAt = null;
+        for (let i = 0; i < 30 * 12 && u.bonus && flashAt === null; i++) {
+            Machine.update(u, 1 / 30);
+            if (u.events.some(e => e.type === 'goldFlash')) flashAt = u.bonus.uwanose.t - t0;
+        }
+        return { shot, again, flashAt };
+    };
+    let shots = 0, late = 0, wrong = 0;
+    const N = 400;
+    for (let i = 0; i < N; i++) {
+        const r = judge(true, SEED + 100 + i);
+        if (r.again) wrong++;
+        if (r.flashAt === null) wrong++;
+        if (r.shot) { shots++; if (r.flashAt > CONFIG.specs.s399.uwanose.oneshot + 0.2) late++; }
+        if (judge(false, SEED + 900 + i).shot) wrong++;
+    }
+    check(wrong === 0 && late === 0 && near(shots / N, 0.25, 0.07), `上乗せジャッジ: レバーの 一発告知 ${pct(shots / N)}・失敗の ゲームでは なし`);
+}
 // ラウンドの スキップ
 {
     const play = (m, onTick) => { for (let i = 0; i < 30 * 400 && m.mode === 'bonus' || i < 60; i++) { Machine.update(m, 1 / 30); if (onTick) onTick(); } };
@@ -493,7 +522,7 @@ for (const specId of Object.keys(CONFIG.specs)) {
     }
     balls = Machine.skipBonus(m) + m.bonus.round * 0;
     check(!before && !during && after && m.stats.promoWins === 1 && m.bonus.rounds === 20 && balls > 1500, `スキップ: 昇格チャレンジの 結果の あとから (${balls}発)`);
-    // 上乗せ: スキップの あとに 上乗せタイム → 判定
+    // 上乗せ: スキップの あとに 上乗せジャッジ → 判定
     for (const win of [true, false]) {
         const u = Machine.create(CONFIG, 's399', seeded(SEED + 13));
         Machine.debugMode(u, 'st');
