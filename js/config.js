@@ -183,11 +183,11 @@ const CONFIG = {
             st: { hitRate: 1 / 70, fallRate: 1 / 210 },
             hashira: { hitRate: 1 / 72.6, spins: 100 },   // 1 − (1 − 1/72.6)^100 ≒ 75%
             target: { st: 0.5, continuation: 0.75 },
-            // 設定 1〜6 の 釘 (設定1〜5 は 1000円で 約 9 〜 13 回転。3000発・上乗せで 出玉が 多い ぶん、しめて ある)
+            // 設定 1〜6 の 釘 (設定1〜5 は 1000円で 約 10 〜 16 回転。2026-11-04 ユーザー指定で 設定1〜5 の 出玉率を 上げた)
             // 設定6 (2026-11-04 ユーザー指定): 確率が 低いので 1/319 の 設定6 より 回す。出玉率は 高く なっても よい
-            settings: [{ hesoWidth: 6.15, heso: 0.035 }, { hesoWidth: 6.5, heso: 0.039 }, { hesoWidth: 6.8, heso: 0.043 },
-                { hesoWidth: 7.25, heso: 0.047 }, { hesoWidth: 7.3, heso: 0.051 }, { hesoWidth: 16.4, heso: 0.203 }],
-            settingRtp: [0.8, 0.88, 0.96, 1.04, 1.12, 2.45]
+            settings: [{ hesoWidth: 6.5, heso: 0.039 }, { hesoWidth: 7.0, heso: 0.045 }, { hesoWidth: 7.3, heso: 0.051 },
+                { hesoWidth: 8.0, heso: 0.058 }, { hesoWidth: 8.4, heso: 0.066 }, { hesoWidth: 16.4, heso: 0.203 }],
+            settingRtp: [0.9, 1.0, 1.1, 1.2, 1.35, 2.45]
         }
     },
 
