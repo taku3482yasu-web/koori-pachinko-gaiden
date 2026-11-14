@@ -180,8 +180,10 @@ const Art = (() => {
                 }
             });
         }
-        cache.set(key, c);
-        return c;
+        // 2026-11-14 (ユーザー指定: シリーズの ドット絵を 緻密に): 4 倍の 細かさに 作り直す (js/pixel-hd.js。輪郭を なめらかに・ふちに 光と 影)
+        const hd = typeof PixelHD !== 'undefined' ? PixelHD.bake(PixelHD.fromCanvas(c)).canvas : c;
+        cache.set(key, hd);
+        return hd;
     }
     function has(id) { return Boolean(NEW_ART[id] || LEGACY_ART[id]); }
     function size(id) { const a = NEW_ART[id] || LEGACY_ART[id]; return a ? { w: a.w, h: a.h } : { w: 16, h: 16 }; }
