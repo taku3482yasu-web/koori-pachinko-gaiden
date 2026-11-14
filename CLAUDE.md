@@ -30,3 +30,4 @@
 - テスト: `node tools/test.js` (抽選・継続率・撃破率・演出の 信頼度)。盤面の 玉の 流れは `node tools/flow.js`・`tools/trace.html`。コミットの 前に .githooks/pre-commit が テストする (`git config core.hooksPath .githooks`)。
 - 画面の 確認: `sh tools/shot.sh "index.html?spec=s319&force=hit&skip=5" out.png 1000,1100` (force: hit / hitJitan / reach / st / stHit / fall / jitan / hst / hstHit / hstMiss。&setting=6・&senbare=roar|voice。force=charge|chargeSt・&reach=hashiraAll・&mini=goldDog&miniWin=0・&text=gold・&gizi=2。画面の「デバッグ」ボタンで リーチ・ミニゲーム・文字の 色・疑似連・チャージを えらべる。&debug=1 なら はじめから ひらく)。
 - main に push すると GitHub Pages に 公開される。変更が できて テストが 通ったら、聞かずに commit して main に push する。
+- BGM の 音声ファイル (2026-11-14 ユーザー指定): `js/bgm.js` の `BGM_FILES` に ある 曲は `sounds/bgm/*.mp3` を 流す (ないときは チップチューン)。大当たりの ラウンド中は 外伝の テーマ曲「めざめの鼓動」(`gaiden-round.mp3`)。実機の 動画 (*.mp4) は .gitignore で 公開しない。

@@ -1,5 +1,5 @@
 // オフラインでも 遊べる ように (ホーム画面に 追加)。ファイルが かわったら VERSION を 上げる (tools/bump-version.sh)
-const VERSION = 'gaiden-22';
+const VERSION = 'gaiden-23';
 const FILES = ['./', 'index.html', 'howto.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon-192.png',
     'js/config.js', 'js/art-legacy.js', 'js/art.js', 'js/customize.js', 'js/show.js', 'js/records.js', 'js/machine.js', 'js/physics.js', 'js/board.js',
     'js/render.js', 'js/lcd.js', 'js/cabinet.js', 'js/sound-heso.js', 'js/audio.js', 'js/bgm.js', 'js/main.js'];
@@ -8,5 +8,6 @@ self.addEventListener('activate', e => e.waitUntil(caches.keys().then(keys => Pr
 // ネットに つながる ときは 新しい ものを、つながらない ときは とっておいた ものを
 self.addEventListener('fetch', e => {
     if (e.request.method !== 'GET') return;
+    if (new URL(e.request.url).pathname.includes('/sounds/bgm/')) return;   // 曲は 少しずつ 読む (Range) ので 保存しない (2026-11-14)
     e.respondWith(fetch(e.request).then(r => { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); return r; }).catch(() => caches.match(e.request)));
 });

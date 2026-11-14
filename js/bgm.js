@@ -4,7 +4,15 @@
 // 曲は 8分音符 単位の 音名の 並び。'.' は 休符。メロディ (矩形波) と ベース (三角波)。
 // 通常時 (さがす 旅)・柱の氷の アジト・ST おにおにの挑戦 (はげしい)・バトル・時短 (いそぐ)・大当たり (ファンファーレ)
 // 先の 音を 少しずつ 予約して 鳴らすので、描画が 重くても テンポが ずれにくい
+// 2026-11-14 (ユーザー指定: Suno で 作った 曲を 入れる): BGM_FILES に ある 曲は 音声ファイル (sounds/bgm/*.mp3) を 流す。
+//   ファイルが ない・読めない ときは 今までの チップチューン。<audio> で 鳴らすので file:// でも 鳴る
 // =====================================================================
+
+// 音声ファイルの 曲 (チップチューンの 曲の 名前 → ファイル)。gain は 音量の 倍率 (曲の 大きさを 測って そろえた)
+const BGM_FILES = {
+    // 大当たりの ラウンド中: 外伝の テーマ曲「めざめの鼓動」(2026-11-14)
+    bonus: { src: 'sounds/bgm/gaiden-round.mp3', gain: 0.72 }
+};
 
 const BGM_TRACKS = {
     // 通常時: こおりくんを さがす 旅 (すこし さびしい 行進)
@@ -125,6 +133,40 @@ const Bgm = (() => {
     const LOOKAHEAD = 0.15;
     const NOTE_INDEX = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
     let ctx = null, master = null, trackName = null, step = 0, nextTime = 0, volume = 0.5, paused = true;
+    const files = {};   // 音声ファイルの 曲 { audio, failed, starting }
+
+    function fileOf(name) {
+        const def = BGM_FILES[name];
+        if (!def || typeof Audio === 'undefined') return null;
+        if (!files[name]) {
+            const audio = new Audio();
+            audio.loop = true;
+            audio.preload = 'auto';
+            const f = { audio, failed: false, starting: false };
+            audio.addEventListener('error', () => {
+                f.failed = true;   // ファイルが ない → チップチューンに する
+                if (trackName === name && ctx) { step = 0; nextTime = ctx.currentTime + 0.05; }
+            });
+            audio.src = def.src;
+            files[name] = f;
+        }
+        return files[name];
+    }
+    const fileActive = () => { const f = files[trackName]; return Boolean(f && !f.failed); };
+    // 音声ファイルの 曲を 鳴らす・止める (音量・一時停止も ここで 合わせる)
+    function syncFiles() {
+        for (const [name, f] of Object.entries(files)) {
+            if (name === trackName && !f.failed && ctx && !paused) {
+                f.audio.volume = Math.max(0, Math.min(1, volume * 2 * BGM_FILES[name].gain));
+                if (f.audio.paused && !f.starting) {
+                    f.starting = true;
+                    f.audio.play().catch(() => { /* まだ 操作の 前 */ }).finally(() => { f.starting = false; });
+                }
+            } else if (!f.audio.paused) {
+                f.audio.pause();
+            }
+        }
+    }
 
     // 台の 状態から 曲を 決める
     function trackFor(m) {
@@ -145,6 +187,7 @@ const Bgm = (() => {
     }
     function applyVolume() {
         if (master) master.gain.setTargetAtTime(paused ? 0 : volume * 0.12, ctx.currentTime, 0.02);
+        syncFiles();
     }
     function init(audioContext) {
         if (ctx || !audioContext) return;
@@ -154,6 +197,7 @@ const Bgm = (() => {
         master.connect(ctx.destination);
         applyVolume();
         setInterval(schedule, 25);
+        Object.keys(BGM_FILES).forEach(n => { const f = fileOf(n); if (f) f.audio.load(); });   // 置いて ある 曲を 先に 調べる
     }
     function note(freq, type, time, duration, level) {
         const osc = ctx.createOscillator();
@@ -168,6 +212,7 @@ const Bgm = (() => {
         osc.stop(time + duration + 0.02);
     }
     function schedule() {
+        if (fileActive()) return syncFiles();   // 音声ファイルの 曲
         if (!ctx || !trackName || paused || ctx.state !== 'running') return;
         const track = BGM_TRACKS[trackName];
         const stepDur = 60 / track.bpm / 2;
@@ -183,9 +228,16 @@ const Bgm = (() => {
     }
     function play(name) {
         if (trackName === name) return;
+        const prev = files[trackName];
+        if (prev) {
+            prev.audio.pause();
+            try { prev.audio.currentTime = 0; } catch (e) { /* まだ 読み込み中 */ }   // 次の 大当たりは 頭から
+        }
         trackName = name;
         step = 0;
         if (ctx) nextTime = ctx.currentTime + 0.1;
+        fileOf(name);
+        syncFiles();
     }
     function setPaused(on) {
         if (paused === on) return;
