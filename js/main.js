@@ -46,6 +46,8 @@
         game.hints = saved ? saved.hints : [];
         game.history = saved ? saved.history : [];
         if (saved) game.balls = saved.balls;
+        // データカウンター (2026-11-17 やることリスト C: 前作に あって 外伝に なかった)。invested = はじめの 玉 + 玉貸し、graph = [打った 玉, 差玉]
+        game.counter = saved && saved.counter ? saved.counter : { invested: game.balls, spins: 0, shot: 0, graph: [[0, 0]] };
         game.machine = saved ? Machine.restore(CONFIG, saved.machine) : Machine.create(CONFIG, specId);
         syncCustomize();
         Machine.setRashType(game.machine, store.get('rash', 'onioni'));
@@ -95,10 +97,64 @@
         if (['theme', 'ball', 'koori'].includes(key) && game.board) game.view = BoardView.create(canvas, game.board, CONFIG);
     });
 
+    // ----- データカウンター (2026-11-17 やることリスト C: 前作 koori-pachinko と 同じ 形に) -----
+    // 出玉の 推移: 50 発 打つ ごとに [打った 玉, 差玉] を 記録 (400 点を こえたら 1 つ おきに 間引く)
+    function countShot() {
+        const c = game.counter;
+        if (!c) return;
+        c.shot++;
+        if (c.shot % 50) return;
+        c.graph.push([c.shot, game.balls - c.invested]);
+        if (c.graph.length > 400) c.graph = c.graph.filter((p, i) => i % 2 === 0 || i === c.graph.length - 1);
+    }
+    function renderData() {
+        const r = game.record, m = game.machine, s = m.stats, c = game.counter;
+        const fmt = n => n.toLocaleString(), signed = n => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${fmt(Math.abs(n))}`;
+        const colors = CONFIG.settingHint.colors;
+        const rate = game.stats.launchedLeft > 50 ? (game.stats.heso / game.stats.launchedLeft * 250).toFixed(1) : '-';
+        const now = m.bonus ? '当たり中' : m.mode !== 'normal' ? 'RASH・時短中' : `${fmt(m.normalSpins)} 回転`;
+        const stats = [
+            ['総回転数', fmt(c.spins)], ['現在', now],
+            ['初当たり', `${fmt(s.firstHits)} 回`], ['初当たり確率', s.firstHits ? `1/${Math.round(s.spins1 / s.firstHits)}` : '-'],
+            ['ST 突入', `${fmt(s.stEntries)} 回`], ['最高', `${fmt(s.bestChain)} 連`],
+            ['差玉', signed(game.balls - c.invested)], ['回転率', rate === '-' ? '-' : `${rate} /1k`]
+        ];
+        const bars = game.history.filter(h => h.kind !== 'RASH').slice(0, 20).reverse();
+        const max = Math.max(100, ...bars.map(h => h.spins));
+        const seen = [1, 2, 3, 4, 5, 6].map(l => [l, game.hints.filter(x => x === l).length]).filter(([, n]) => n);
+        const row = h => `<tr><td>${h.kind}</td><td>${h.kind === 'RASH' ? `${h.chain} 連` : `${h.spins} 回転`}</td><td>${h.rounds * 150}発</td><td>${h.diff === undefined ? '-' : signed(h.diff)}</td></tr>`;
+        $('data-body').innerHTML = `<div class="dc-stats">${stats.map(([l, v]) => `<div class="dc-item"><span class="dc-label">${l}</span><span class="dc-value">${v}</span></div>`).join('')}</div>`
+            + `<h3>大当たりまでの 回転数</h3><div class="dc-bars">${bars.map(h => `<div class="dc-bar" title="${h.kind} ${h.spins} 回転"><span>${h.spins}</span><i class="${h.kind === 'チャージ' ? 'dc-charge' : ''}" style="height:${Math.max(3, Math.round(h.spins / max * 100))}%"></i></div>`).join('') || '<small>まだ ありません</small>'}</div>`
+            + `<h3>出玉の 推移</h3><canvas id="dc-graph" class="dc-graph" width="420" height="150"></canvas><small>横: 打った 玉 / 縦: 差玉 (持ち玉 − はじめの 玉と 玉貸しの 合計)</small>`
+            + `<h3>当たりの 履歴</h3>${game.history.length ? `<div class="dc-table-wrap"><table class="dc-table"><thead><tr><th>種類</th><th>回転数 / 連</th><th>出玉</th><th>差玉</th></tr></thead><tbody>${game.history.map(row).join('')}</tbody></table></div>` : '<small>まだ なし</small>'}`
+            + `<h3>設定</h3><p>${game.settingKnown ? `設定${game.setting}` : '？ (おまかせ)'}・トロフィー: ${seen.length ? seen.map(([l, n]) => `${colors[l].name} ×${n}`).join('・') : 'まだ なし'}<br>`
+            + `<small>白 = どの 設定でも・青 = 2 以上・緑 = 3 以上・紫 = 4 以上・赤 = 5 以上・虹 = 6 確定</small></p>`
+            + `<p>これまで: 初当たり ${r.firstHits} 回・最高 ${r.bestChain} 連・最高 ${r.bestBalls} 個</p>`;
+        drawGraph($('dc-graph'), [...c.graph, [c.shot, game.balls - c.invested]]);
+    }
+    function drawGraph(cv, pts) {
+        const g = cv.getContext('2d'), W = cv.width, H = cv.height, pad = 6;
+        g.clearRect(0, 0, W, H);
+        const xMax = Math.max(100, ...pts.map(p => p[0])), yMax = Math.max(100, ...pts.map(p => Math.abs(p[1])));
+        const X = x => pad + x / xMax * (W - pad * 2), Y = y => H / 2 - y / yMax * (H / 2 - pad);
+        g.strokeStyle = 'rgba(255,255,255,0.25)';
+        g.lineWidth = 1;
+        g.beginPath(); g.moveTo(pad, H / 2); g.lineTo(W - pad, H / 2); g.stroke();
+        g.fillStyle = '#9cf0c8';
+        g.font = '11px sans-serif';
+        g.fillText(`+${yMax.toLocaleString()}`, pad, 12);
+        g.fillText(`−${yMax.toLocaleString()}`, pad, H - 4);
+        g.strokeStyle = '#ffd34a';
+        g.lineWidth = 2;
+        g.beginPath();
+        pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))));
+        g.stroke();
+    }
+
     // 前回の つづき (2026-11-04 ユーザー指定: 前作から)。5 秒ごとと ページを とじる ときに 保存する。確認用の URL では 保存しない
     function saveGame() {
         if (!game.machine || params.has('spec')) return;
-        store.set('save', { specId: game.specId, setting: game.setting, known: game.settingKnown, balls: game.balls, hints: game.hints, history: game.history, machine: Machine.snapshot(game.machine) });
+        store.set('save', { specId: game.specId, setting: game.setting, known: game.settingKnown, balls: game.balls, hints: game.hints, history: game.history, counter: game.counter, machine: Machine.snapshot(game.machine) });
     }
     window.addEventListener('pagehide', saveGame);
 
@@ -144,6 +200,7 @@
             Physics.launch(game.world, game.strength, CONFIG);
             game.balls--;
             game.stats.launched++;
+            countShot();
             if (aim === 'left') game.stats.launchedLeft++;
             game.nextShot = time + CONFIG.launch.interval;
         }
@@ -184,14 +241,14 @@
             if (e.result.senbare) senbare(e.result.senbare, e.result.btn);
             else Sound.play('hold');
         }
-        else if (e.type === 'spinStart') { Sound.play('stop'); schedule(e.plan, e.duration); spinFx(e.plan); }
+        else if (e.type === 'spinStart') { game.counter.spins++; Sound.play('stop'); schedule(e.plan, e.duration); spinFx(e.plan); }
         else if (e.type === 'spinEnd') { if (e.result.kind === 'hit') Sound.play('win'); }
         else if (e.type === 'bonusStart') {
             Sound.play(e.charge ? 'chance' : 'fanfare');
             if (e.next === 'st' && !e.charge && !e.promo) openRashChoice();
             if (e.from === 'normal' && !e.charge) { game.record.firstHits++; game.chainStartBalls = game.balls; }
             Records.add(e.charge ? 'charges' : 'hits');
-            game.history.unshift({ kind: e.charge ? 'チャージ' : e.from === 'normal' ? '初当たり' : 'RASH', rounds: e.rounds, spins: m.normalSpins, chain: e.chain });
+            game.history.unshift({ kind: e.charge ? 'チャージ' : e.from === 'normal' ? '初当たり' : 'RASH', rounds: e.rounds, spins: m.normalSpins, chain: e.chain, diff: game.balls - game.counter.invested });
             game.history.length = Math.min(game.history.length, 20);
         } else if (e.type === 'ending') {
             // チャージから ST: ここで はじめて 知らせる
@@ -543,7 +600,7 @@
     Cabinet.place($('push'), { x: Cabinet.CAB.push.x - Cabinet.CAB.push.r, y: Cabinet.CAB.push.y - Cabinet.CAB.push.r, w: Cabinet.CAB.push.r * 2, h: Cabinet.CAB.push.r * 2 });
     Cabinet.setupLever($('lever'), lever);
     $('skip-button').addEventListener('click', () => { Sound.unlock(); skipRounds(); });
-    $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; });
+    $('lend-button').addEventListener('click', () => { game.balls += CONFIG.balls.lend; if (game.counter) game.counter.invested += CONFIG.balls.lend; });
     $('sound-button').addEventListener('click', () => {
         Sound.unlock();
         Sound.setMuted(!Sound.muted);
@@ -551,18 +608,7 @@
     });
     $('sound-button').textContent = Sound.muted ? '音: OFF' : '音: ON';
     $('machine-button').addEventListener('click', () => { game.paused = true; setFire(false); $('picker').hidden = false; });
-    $('data-button').addEventListener('click', () => {
-        const r = game.record, m = game.machine, s = m.stats;
-        const colors = CONFIG.settingHint.colors;
-        const seen = [1, 2, 3, 4, 5, 6].map(l => `${colors[l].name} ${game.hints.filter(x => x === l).length}`).join('・');
-        const rate = game.stats.launchedLeft > 50 ? (game.stats.heso / game.stats.launchedLeft * 250).toFixed(1) : '-';
-        $('data-body').innerHTML = `<p>この台: 初当たり ${s.firstHits} 回・ST 突入 ${s.stEntries} 回・ST の 撃破 ${s.stHits} 回・転落 ${s.falls} 回・最高 ${s.bestChain} 連</p>`
-            + `<p>設定: ${game.settingKnown ? `設定${game.setting}` : '？ (おまかせ)'}・回転率 ${rate} (1000円あたり)<br>トロフィー: ${seen}<br>`
-            + `<small>白 = どの 設定でも・青 = 2 以上・緑 = 3 以上・紫 = 4 以上・赤 = 5 以上・虹 = 6 確定</small></p>`
-            + `<p>これまで: 初当たり ${r.firstHits} 回・最高 ${r.bestChain} 連・最高 ${r.bestBalls} 個</p>`
-            + `<p>当たりの 履歴 (新しい 順):<br>${game.history.map(h => `${h.kind} ${h.rounds * 150}発${h.kind === '初当たり' || h.kind === 'チャージ' ? ` (${h.spins} 回転)` : ` (${h.chain}連)`}`).join('<br>') || 'まだ なし'}</p>`;
-        $('data-panel').hidden = false;
-    });
+    $('data-button').addEventListener('click', () => { renderData(); $('data-panel').hidden = false; });
     document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
         b.closest('.picker').hidden = true;
         if (game.machine && $('picker').hidden) game.paused = false;
@@ -699,6 +745,7 @@
         startMachine(params.get('spec'), setting, params.has('setting'));
         const skip = Number(params.get('skip')) || 0;
         for (let i = 0; i < skip * 60; i++) tick(1 / 60);
+        if (params.get('data') === '1') { renderData(); $('data-panel').hidden = false; }   // 確認用: データカウンターを ひらく (2026-11-17)
     }
     window.__game = game;
     requestAnimationFrame(frame);

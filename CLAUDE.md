@@ -31,3 +31,4 @@
 - 画面の 確認: `sh tools/shot.sh "index.html?spec=s319&force=hit&skip=5" out.png 1000,1100` (force: hit / hitJitan / reach / st / stHit / fall / jitan / hst / hstHit / hstMiss。&setting=6・&senbare=roar|voice。force=charge|chargeSt・&reach=hashiraAll・&mini=goldDog&miniWin=0・&text=gold・&gizi=2。画面の「デバッグ」ボタンで リーチ・ミニゲーム・文字の 色・疑似連・チャージを えらべる。&debug=1 なら はじめから ひらく)。
 - main に push すると GitHub Pages に 公開される。変更が できて テストが 通ったら、聞かずに commit して main に push する。
 - BGM の 音声ファイル (2026-11-14 ユーザー指定): `js/bgm.js` の `BGM_FILES` に ある 曲は `sounds/bgm/*.mp3` を 流す (ないときは チップチューン)。大当たりの ラウンド中は 外伝の テーマ曲「めざめの鼓動」(`gaiden-round.mp3`)。実機の 動画 (*.mp4) は .gitignore で 公開しない。
+- データカウンター (2026-11-17 やることリスト C: 前作に あって 外伝に なかった): 「データ」の 窓に 数字の マス・大当たりまでの 回転数の 棒・出玉の 推移の グラフ・当たりの 履歴の 表・トロフィー (`renderData`・`drawGraph`)。記録は `game.counter` (invested = はじめの 玉 + 玉貸し・spins・shot・graph。つづきに 保存)。確認は `&data=1` (はじめから データを ひらく)。
